@@ -1,0 +1,24 @@
+name: probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/marche-noir-gages-app-p8f10m]
+    paths: ['.github/workflows/probe.yml']
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Network check
+        run: |
+          set -x
+          curl -sS -o /dev/null -w "emqx=%{http_code}\n" --max-time 15 https://broker.emqx.io || true
+          curl -sS -o /dev/null -w "hivemq=%{http_code}\n" --max-time 15 https://broker.hivemq.com || true
+          curl -sS -o /dev/null -w "mosquitto=%{http_code}\n" --max-time 15 https://test.mosquitto.org || true
+      - name: Pages enablement probe
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
