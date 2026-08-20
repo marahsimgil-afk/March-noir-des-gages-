@@ -168,9 +168,13 @@ check(settle >= 0,
   `${phones.length * TAPS} mises envoyées en ${spent} ms — la TV a le compte exact pour chacun (+${settle} ms)`);
 if (settle < 0) console.log('    état TV : ' + (await tv.page.textContent('#bidders')));
 
+// La TV et les téléphones ne peuvent pas être identiques au même
+// instant — il y a un aller-retour réseau entre les deux. Ce qu'on
+// vérifie, c'est qu'ils convergent, et vite.
 const bestTv = (await tv.page.textContent('#best-amount')).trim();
-const bestPhone = (await phones[3].page.textContent('#pl-best')).trim();
-check(bestTv === bestPhone, `meilleure offre identique sur TV et téléphone (${bestTv} gorgées)`);
+const conv = await until(async () => (await phones[3].page.textContent('#pl-best')).trim() === bestTv,
+  { timeout: 8000 });
+check(conv >= 0, `TV et téléphone affichent la même meilleure offre (${bestTv} gorgées, convergence en ${conv} ms)`);
 const mine = (await phones[0].page.textContent('#pl-mine')).trim();
 check(mine === String(expected['Léo']), `Léo voit sa propre mise cumulée (${mine})`);
 
