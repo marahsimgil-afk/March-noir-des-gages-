@@ -3,10 +3,13 @@
    client MQTT distincts) — c'est l'équivalent le plus proche d'appareils
    séparés qu'on puisse obtenir sur une seule machine. */
 import { chromium } from 'playwright';
+import fs from 'node:fs';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8787/';
-const BROKER = process.env.BROKER || 'ws://127.0.0.1:9001';
-const url = (hash) => `${BASE}?broker=${encodeURIComponent(BROKER)}#${hash}`;
+// BROKER vide ⇒ l'application utilise ses brokers publics par défaut
+const BROKER = process.env.BROKER === undefined ? 'ws://127.0.0.1:9001' : process.env.BROKER;
+const url = (hash) => BROKER ? `${BASE}?broker=${encodeURIComponent(BROKER)}#${hash}` : `${BASE}#${hash}`;
+console.log(`Cible : ${BASE}\nRelais : ${BROKER || '(brokers publics par défaut)'}`);
 
 const NAMES = ['Marah', 'Léo', 'Chloé', 'Yanis', 'Emma', 'Tom', 'Inès', 'Hugo', 'Jade'];
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
@@ -28,8 +31,9 @@ async function until(fn, { timeout = 15000, every = 60 } = {}) {
   }
 }
 
+const chemin = process.env.CHROME_PATH || '/opt/pw-browsers/chromium';
 const browser = await chromium.launch({
-  executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium',
+  ...(fs.existsSync(chemin) ? { executablePath: chemin } : {}),
   args: ['--no-sandbox', '--disable-dev-shm-usage']
 });
 
@@ -229,7 +233,7 @@ check(twoLots >= 0, 'les deux lots figurent à l\'historique');
 // ─────────────────────────────────────────────── 8. Retardataire + rechargement
 console.log('\n\x1b[1m8. Retardataire et rechargement de page\x1b[0m');
 const late = await newDevice('Retardataire', PHONE);
-await late.page.goto(qrURL.replace(/^[^?]*/, BASE), { waitUntil: 'domcontentloaded' });
+await late.page.goto(qrURL, { waitUntil: 'domcontentloaded' });
 const lateOk = await until(async () => await late.page.locator('#who-list button').count() >= 9, { timeout: 20000 });
 check(lateOk >= 0, `un retardataire qui scanne le QR arrive sur « Qui es-tu ? » (${lateOk} ms)`);
 
@@ -248,7 +252,7 @@ check((await tv.page.textContent('#board')).includes(String(winner[1])), 'les ar
 // ─────────────────────────────────────────────── 9. Mode secours hors-ligne
 console.log('\n\x1b[1m9. Mode secours : écran central sans aucun relais\x1b[0m');
 const solo = await newDevice('Secours');
-await solo.page.goto(`${BASE}?broker=${encodeURIComponent('ws://127.0.0.1:9')}#setup`, { waitUntil: 'domcontentloaded' });
+await solo.page.goto(`${BASE}${BASE.includes('?') ? '&' : '?'}broker=${encodeURIComponent('wss://127.0.0.1:9')}#setup`, { waitUntil: 'domcontentloaded' });
 for (let i = 0; i < 3; i++) await solo.page.locator('#names-list .name-input').nth(i).fill(['Ana', 'Bob', 'Cyd'][i]);
 await solo.page.click('#btn-open-room');
 await solo.page.waitForSelector('#screen-tv.is-active', { timeout: 10000 });
