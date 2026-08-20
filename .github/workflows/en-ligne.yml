@@ -63,7 +63,9 @@ jobs:
             ${PAGES:+"$PAGES"} \
             ${PAGES:+"${PAGES}solo.html"} \
             "https://cdn.statically.io/gh/$REPO/$SHA/docs/solo.html" \
+            "https://cdn.jsdelivr.net/gh/$REPO@$SHA/docs/solo.html" \
             "https://cdn.statically.io/gh/$REPO/$SHA/docs/index.html" \
+            "https://cdn.jsdelivr.net/gh/$REPO@$SHA/docs/index.html" \
             "https://rawcdn.githack.com/$REPO/$SHA/docs/solo.html")
           echo "base=$base" >> "$GITHUB_OUTPUT"
           { echo "## L'application est en ligne"; echo ""; echo "**$base**"; } >> "$GITHUB_STEP_SUMMARY"

@@ -33,10 +33,14 @@
     for (var i = 0; i < n; i++) out += ALPHA[a[i] % ALPHA.length];
     return out;
   }
+  // Mémorisé : en navigation privée iOS, localStorage lève une exception et
+  // l'identifiant doit malgré tout rester stable pendant toute la soirée.
+  var _device = null;
   function deviceId() {
-    var d = store('mng.device');
-    if (!d) { d = randCode(10).toLowerCase(); store('mng.device', d); }
-    return d;
+    if (_device) return _device;
+    _device = store('mng.device') || randCode(10).toLowerCase();
+    store('mng.device', _device);
+    return _device;
   }
 
   // ------------------------------------------------------------- transport

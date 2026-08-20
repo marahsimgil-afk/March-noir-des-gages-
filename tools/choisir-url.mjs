@@ -12,13 +12,17 @@ const navigateur = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage']
 });
 
+// Deux passes : un CDN au cache froid doit d'abord récupérer le fichier
+// depuis GitHub, ce qui peut dépasser le délai du premier essai.
 let retenue = '';
-for (const base of candidats) {
+for (let passe = 1; passe <= 2 && !retenue; passe++) {
+ if (passe === 2) { console.error('  — deuxième passe (caches réchauffés)'); await new Promise(r => setTimeout(r, 15000)); }
+ for (const base of candidats) {
   const page = await (await navigateur.newContext()).newPage();
   let verdict;
   try {
-    await page.goto(base + '#setup', { waitUntil: 'domcontentloaded', timeout: 25000 });
-    await page.waitForSelector('#names-list .name-input', { timeout: 15000 });
+    await page.goto(base + '#setup', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#names-list .name-input', { timeout: 25000 });
     const e = await page.evaluate(() => ({
       mqtt: typeof window.mqtt, qr: typeof window.QRCodeLib,
       champs: document.querySelectorAll('#names-list .name-input').length
@@ -31,6 +35,7 @@ for (const base of candidats) {
   await page.context().close();
   if (!verdict) { console.error(`  retenue : ${base}`); retenue = base; break; }
   console.error(`  écartée : ${base}\n            ${verdict}`);
+ }
 }
 await navigateur.close();
 if (!retenue) { console.error('Aucune URL candidate ne fait démarrer l’application.'); process.exit(1); }
