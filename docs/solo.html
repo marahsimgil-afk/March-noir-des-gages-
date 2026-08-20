@@ -949,7 +949,13 @@ Minimum version required to store current data is: `+i+`.
       S.seq++;
       S.now = t;
       S.online = Object.keys(seen).filter(function (k) { return t - seen[k] < 25000; });
-      bus.pub(bus.root + 'state', S, true);
+      // L'état part jusqu'à huit fois par seconde pendant une enchère : on
+      // n'y met que les derniers lots, les téléphones n'affichent pas
+      // l'historique complet. L'écran central, lui, garde tout localement.
+      var charge = {};
+      for (var k in S) if (Object.prototype.hasOwnProperty.call(S, k)) charge[k] = S[k];
+      charge.history = S.history.slice(-6);
+      bus.pub(bus.root + 'state', charge, true);
       store('mng.tv', { state: S });
     }
 

@@ -65,13 +65,31 @@ jobs:
             "https://cdn.statically.io/gh/$REPO/$SHA/docs/solo.html" \
             "https://cdn.jsdelivr.net/gh/$REPO@$SHA/docs/solo.html" \
             "https://cdn.statically.io/gh/$REPO/$SHA/docs/index.html" \
-            "https://cdn.jsdelivr.net/gh/$REPO@$SHA/docs/index.html" \
-            "https://rawcdn.githack.com/$REPO/$SHA/docs/solo.html")
+            "https://rawcdn.githack.com/$REPO/$SHA/docs/solo.html" || true)
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          { echo "## L'application est en ligne"; echo ""; echo "**$base**"; } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$base" ]; then
+            { echo "## L'application est en ligne"; echo ""; echo "**$base**"; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Aucun hébergement public disponible. Activer GitHub Pages une fois : Settings → Pages → Source « Deploy from a branch » → branche ${{ github.ref_name }}, dossier /docs. L'application sera alors servie sur https://${{ github.repository_owner }}.github.io/$(echo '${{ github.repository }}' | cut -d/ -f2)/"
+            { echo "## Hébergement à activer";
+              echo "";
+              echo "Aucun relais public tiers ne sert cette page correctement (jsDelivr renvoie du texte brut, githack une page publicitaire, statically expire).";
+              echo "";
+              echo "**Settings → Pages → Source : « Deploy from a branch » → branche \`${{ github.ref_name }}\`, dossier \`/docs\` → Save.**";
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Test multi-appareils sur l'application en ligne
+        if: steps.url.outputs.base != ''
         env:
           BASE: ${{ steps.url.outputs.base }}
           BROKER: ""
         run: node test/e2e.mjs
+
+      # Sans hébergement public, on vérifie quand même la synchronisation
+      # multi-appareils, sur un broker et un serveur montés dans le runner.
+      - name: Test multi-appareils sur un banc local
+        if: steps.url.outputs.base == ''
+        run: |
+          node test/serve.mjs & sleep 3
+          node test/e2e.mjs
