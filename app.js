@@ -19,11 +19,14 @@
 
 // L'identifiant (1re lettre du code de salle) désigne le broker : un joueur
 // qui scanne le QR sait donc sur quel serveur rejoindre l'écran central.
+// Liste établie à la mesure (test/sonde-brokers.js) : connexion + messages
+// « retained » vérifiés depuis Internet. Mosquitto et Eclipse ont été retirés,
+// ils ne répondent plus.
 var BROKERS = [
   { id: 'A', nom: 'EMQX',      url: 'wss://broker.emqx.io:8084/mqtt' },
   { id: 'B', nom: 'HiveMQ',    url: 'wss://broker.hivemq.com:8884/mqtt' },
-  { id: 'C', nom: 'Mosquitto', url: 'wss://test.mosquitto.org:8081/mqtt' },
-  { id: 'D', nom: 'Eclipse',   url: 'wss://mqtt.eclipseprojects.io:443/mqtt' }
+  { id: 'C', nom: 'Dashboard', url: 'wss://mqtt-dashboard.com:8884/mqtt' },
+  { id: 'D', nom: 'EMQX bis',  url: 'wss://broker-cn.emqx.io:8084/mqtt' }
 ];
 
 var ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I, O, 0, 1
