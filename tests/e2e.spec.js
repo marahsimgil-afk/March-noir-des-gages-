@@ -51,21 +51,28 @@ async function ouvrirSalle(browser, noms, duree) {
   const code = (await page.locator('#qr-code-txt').textContent()).trim();
   expect(code).toMatch(/^[A-Z0-9]{5}$/);
   await expect(page.locator('#qr-cible svg')).toBeVisible();
+  // L'adresse réellement encodée dans le QR code : c'est elle que suivront les
+  // téléphones, donc c'est elle que les tests doivent emprunter.
+  const urlJoueur = await page.locator('#qr-cible').getAttribute('data-url');
+  expect(urlJoueur).toContain('#/j/' + code + '/');
   await page.click('#btn-fermer-qr');
 
   // On attend que le lien temps réel soit établi avant de laisser entrer les joueurs.
   await expect(page.locator('#statut-central')).toHaveAttribute('data-etat', 'online', {
     timeout: PATIENCE,
   });
-  return { ctx, page, code };
+  return { ctx, page, code, urlJoueur };
 }
 
-/** Fait rejoindre un téléphone et choisir son prénom. */
-async function rejoindre(browser, code, prenom) {
+/**
+ * Fait rejoindre un téléphone et choisir son prénom, en suivant exactement
+ * l'adresse du QR code affiché sur la TV — comme le ferait un vrai joueur.
+ */
+async function rejoindre(browser, tv, prenom) {
   const ctx = await browser.newContext(TELEPHONE);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${prenom} erreur page]`, e.message));
-  await page.goto(url('#/j/' + code + '/0'));
+  await page.goto(tv.urlJoueur);
 
   const bouton = page.locator(`#liste-identites [data-id]`, { hasText: prenom });
   await expect(bouton).toBeVisible({ timeout: PATIENCE });
@@ -101,7 +108,7 @@ async function taper(page, n, selecteur) {
 
 test('une mise faite sur un téléphone remonte sur l’écran central', async ({ browser }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
+  const lea = await rejoindre(browser, tv, 'Léa');
 
   await lancerLot(tv.page, 'Danser seul au milieu du groupe');
 
@@ -123,8 +130,8 @@ test('deux téléphones se voient l’un l’autre, et le premier arrivé mène 
   browser,
 }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
-  const tom = await rejoindre(browser, tv.code, 'Tom');
+  const lea = await rejoindre(browser, tv, 'Léa');
+  const tom = await rejoindre(browser, tv, 'Tom');
 
   await lancerLot(tv.page, 'Raconter sa pire honte amoureuse');
   await expect(tom.page.locator('#joueur-lot')).toContainText('honte', { timeout: PATIENCE });
@@ -157,7 +164,7 @@ test('neuf appareils qui tapent en même temps : aucune mise perdue', async ({ b
   const noms = ['Léa', 'Tom', 'Nour', 'Sacha', 'Inès', 'Malo', 'Jade', 'Ugo'];
   const tv = await ouvrirSalle(browser, noms, 60);
 
-  const tels = await Promise.all(noms.map((n) => rejoindre(browser, tv.code, n)));
+  const tels = await Promise.all(noms.map((n) => rejoindre(browser, tv, n)));
 
   await lancerLot(tv.page, 'Devenir majordome du groupe');
   for (const t of tels) {
@@ -195,8 +202,8 @@ test('neuf appareils qui tapent en même temps : aucune mise perdue', async ({ b
 
 test('clôture manuelle : adjugé, validation, ardoise mise à jour partout', async ({ browser }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
-  const tom = await rejoindre(browser, tv.code, 'Tom');
+  const lea = await rejoindre(browser, tv, 'Léa');
+  const tom = await rejoindre(browser, tv, 'Tom');
 
   await lancerLot(tv.page, 'Porter le chapeau ridicule');
   await taper(lea.page, 2);
@@ -235,14 +242,14 @@ test('un retardataire qui scanne en cours d’enchère reçoit l’état immédi
   browser,
 }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
+  const lea = await rejoindre(browser, tv, 'Léa');
 
   await lancerLot(tv.page, 'Imiter quelqu’un du groupe');
   await taper(lea.page, 4);
   await expect(tv.page.locator('#central-meneur')).toContainText('Léa', { timeout: PATIENCE });
 
   // Nour arrive maintenant, enchère déjà ouverte.
-  const nour = await rejoindre(browser, tv.code, 'Nour');
+  const nour = await rejoindre(browser, tv, 'Nour');
   await expect(nour.page.locator('#joueur-lot')).toContainText('Imiter', { timeout: PATIENCE });
   await expect(nour.page.locator('#joueur-meneur')).toContainText('Léa', { timeout: PATIENCE });
   await taper(nour.page, 6);
@@ -257,7 +264,7 @@ test('coupure réseau sur un téléphone : reprise automatique, mise conservée'
   browser,
 }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
+  const lea = await rejoindre(browser, tv, 'Léa');
 
   await lancerLot(tv.page, 'Parler avec un accent imposé');
   await taper(lea.page, 2);
@@ -285,7 +292,7 @@ test('coupure réseau sur un téléphone : reprise automatique, mise conservée'
 
 test('l’écran central rechargé retrouve la partie et les ardoises', async ({ browser }) => {
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 60);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
+  const lea = await rejoindre(browser, tv, 'Léa');
 
   await lancerLot(tv.page, 'Chanter toutes ses réponses');
   await taper(lea.page, 8);
@@ -346,8 +353,8 @@ test('le filet de sécurité mono-écran fonctionne sans réseau', async ({ brow
 test('le minuteur se termine tout seul et adjuge au plus offrant', async ({ browser }) => {
   test.setTimeout(120000);
   const tv = await ouvrirSalle(browser, ['Léa', 'Tom', 'Nour'], 20);
-  const lea = await rejoindre(browser, tv.code, 'Léa');
-  const tom = await rejoindre(browser, tv.code, 'Tom');
+  const lea = await rejoindre(browser, tv, 'Léa');
+  const tom = await rejoindre(browser, tv, 'Tom');
 
   await lancerLot(tv.page, 'Être exempté du prochain gage');
   await taper(lea.page, 3);

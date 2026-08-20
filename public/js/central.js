@@ -264,7 +264,11 @@
       $('qr-cible').innerHTML =
         '<p style="color:#000;font-size:0.8rem;padding:10px">QR indisponible — utilisez le code ci-dessous.</p>';
     }
-    $('qr-url-txt').textContent = location.host + location.pathname;
+    // L'adresse exacte est aussi posée sur le conteneur : elle sert de repli
+    // lisible si le QR ne passe pas, et permet de vérifier automatiquement que le
+    // code encodé mène bien au bon endroit.
+    $('qr-cible').setAttribute('data-url', url);
+    $('qr-url-txt').textContent = location.href.split('#')[0];
     $('qr-code-txt').textContent = state.code;
     $('modale-qr').classList.add('on');
   }
