@@ -51,10 +51,11 @@ jobs:
             if [ "$CODE" = "200" ] && echo "$TYPE" | grep -qi 'text/html'; then
               # Les fichiers voisins doivent suivre, sinon l'app ne démarre pas.
               JS=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 25 "$BASE/app.js" || echo 000)
-              MQ=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 40 "$BASE/vendor/mqtt.min.js" || echo 000)
+              MQ=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 60 "$BASE/vendor/mqtt.min.js" || echo 000)
+              QR=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 40 "$BASE/vendor/qrcode.js" || echo 000)
               CSS=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 25 "$BASE/style.css" || echo 000)
-              echo "    app.js=$JS  mqtt=$MQ  style=$CSS"
-              if [ "$JS" = "200" ] && [ "$MQ" = "200" ] && [ "$CSS" = "200" ]; then
+              echo "    app.js=$JS  mqtt=$MQ  qrcode=$QR  style=$CSS"
+              if [ "$JS" = "200" ] && [ "$MQ" = "200" ] && [ "$QR" = "200" ] && [ "$CSS" = "200" ]; then
                 echo "    ✓ retenu"
                 [ -z "$GAGNANT" ] && GAGNANT="$BASE"
               fi

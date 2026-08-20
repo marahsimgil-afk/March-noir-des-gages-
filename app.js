@@ -642,6 +642,16 @@ function enseigne(petit) {
 }
 
 function qrSvg(texte, taille) {
+  // Le QR est un confort, pas une condition de fonctionnement : si la petite
+  // bibliothèque n'a pas pu être chargée, on affiche l'adresse à recopier.
+  if (typeof qrcode === 'undefined') {
+    var repli = h('div', { class: 'carton', style: 'text-align:center' }, [
+      h('div', { class: 'etiquette', style: 'margin-bottom:8px' }, 'QR indisponible'),
+      h('div', { class: 'discret', style: 'word-break:break-all' }, texte)
+    ]);
+    if (taille) repli.style.width = taille;
+    return repli;
+  }
   var qr = qrcode(0, 'M');
   qr.addData(texte);
   qr.make();
@@ -1572,9 +1582,12 @@ var App = {
   },
 
   demarrer: function () {
-    if (typeof mqtt === 'undefined' || typeof qrcode === 'undefined') {
-      document.getElementById('app').appendChild(h('div', { class: 'alerte' },
-        'Le chargement de l’application a échoué. Recharge la page.'));
+    if (typeof mqtt === 'undefined') {
+      document.getElementById('app').appendChild(h('div', { class: 'alerte' }, [
+        h('b', {}, 'Le chargement de l’application a échoué. '),
+        document.createTextNode('Recharge la page (tire vers le bas). Si ça recommence, ' +
+          'vérifie ta connexion Internet.')
+      ]));
       return;
     }
     var code = (P.s || '').toUpperCase();

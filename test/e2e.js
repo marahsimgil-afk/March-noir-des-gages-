@@ -78,6 +78,11 @@ async function nouvelEcran(navigateur, taille) {
   page.on('console', (m) => {
     if (m.type() === 'error') console.log(`    [33m[console][0m ${m.text()}`);
   });
+  page.on('requestfailed', (r) =>
+    console.log(`    \x1b[31m[requête échouée]\x1b[0m ${r.url()} — ${(r.failure() || {}).errorText}`));
+  page.on('response', (r) => {
+    if (r.status() >= 400) console.log(`    \x1b[31m[HTTP ${r.status()}]\x1b[0m ${r.url()}`);
+  });
   return { contexte, page };
 }
 
@@ -290,6 +295,16 @@ async function principal() {
     for (const [nom, ecran] of [['tv', tv], ['tel1', tel1], ['tel2', tel2], ['tel3', tel3]]) {
       if (!ecran) continue;
       try { await ecran.page.screenshot({ path: `/tmp/mng-${nom}.png`, fullPage: true }); } catch (_) {}
+      try {
+        const vu = await ecran.page.evaluate(() => ({
+          texte: (document.body.innerText || '').slice(0, 400),
+          mqtt: typeof window.mqtt,
+          qrcode: typeof window.qrcode,
+          demarre: !!window.MNG
+        }));
+        console.log(`    [2m[${nom}] mqtt=${vu.mqtt} qrcode=${vu.qrcode} app=${vu.demarre}[0m`);
+        console.log(`    [2m[${nom}] écran : ${JSON.stringify(vu.texte)}[0m`);
+      } catch (_) {}
     }
     console.log('  captures d’écran dans /tmp/mng-*.png');
   } finally {
