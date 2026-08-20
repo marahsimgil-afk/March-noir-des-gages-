@@ -60,7 +60,7 @@ Une page statique, sans serveur à héberger et sans compte à créer.
 | `docs/index.html` | Les écrans (accueil, configuration, TV, téléphone, diagnostic) |
 | `docs/app.js` | Transport temps réel, logique d'enchère, rendu |
 | `docs/style.css` | Direction artistique noir / laiton / rouge |
-| `docs/vendor/` | `mqtt.js` et `qrcode` embarqués (aucun CDN au chargement) |
+| `docs/lib/` | `mqtt.js` et `qrcode` embarqués (aucun CDN au chargement) |
 | `test/serve.mjs` | Banc de test local : broker MQTT + serveur statique |
 | `test/e2e.mjs` | Test multi-appareils (Playwright) |
 
