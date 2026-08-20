@@ -77,12 +77,14 @@
       return;
     }
     var html = '';
-    var maintenant = Date.now();
+    // `seen` est daté par l'horloge de l'écran central : on le compare donc à
+    // l'heure de l'écran central, pas à celle du téléphone.
+    var maintenant = maintenantCentral();
     for (var i = 0; i < etat.players.length; i++) {
       var p = etat.players[i];
       // Un prénom déjà actif reste choisissable (téléphone rechargé, batterie
       // changée…), mais on le signale pour éviter les doublons involontaires.
-      var pris = p.seen && maintenant - (p.seen + offset) < 60000;
+      var pris = p.seen && maintenant - p.seen < 60000;
       html +=
         '<button class="nom-bouton" data-id="' + UI.esc(p.id) + '">' +
         UI.esc(p.name) +

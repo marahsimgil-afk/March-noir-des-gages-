@@ -15,9 +15,11 @@ const WS = process.env.MNG_WS === undefined ? 'ws://localhost:9001' : process.en
 const REEL = !WS; // contre l'infra publique : latences plus élevées
 const PATIENCE = REEL ? 40000 : 15000;
 
+// index.html est nommé explicitement : les CDN qui servent une branche GitHub ne
+// résolvent pas un chemin de répertoire vers son index.
 function url(hash) {
   const q = WS ? '?ws=' + encodeURIComponent(WS) : '';
-  return BASE + '/' + q + (hash || '');
+  return BASE + '/index.html' + q + (hash || '');
 }
 
 const TELEPHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
@@ -28,6 +30,11 @@ async function ouvrirSalle(browser, noms, duree) {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('[TV erreur page]', e.message));
   await page.goto(url('#/'));
+
+  // Vérification précoce : si l'adresse ne sert pas réellement l'application, on
+  // échoue en quelques secondes avec un message clair, plutôt que d'attendre
+  // l'expiration de chaque test sur une page vide.
+  await expect(page.locator('#btn-ouvrir-salle')).toBeVisible({ timeout: 20000 });
 
   await page.click('#btn-ouvrir-salle');
   await expect(page.locator('#ecr-install')).toBeVisible();

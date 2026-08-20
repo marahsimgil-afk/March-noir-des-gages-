@@ -54,18 +54,22 @@ jobs:
         run: node tests/unit-game.js
 
       - name: État des brokers MQTT publics
-        run: node tests/check-brokers.js
+        run: |
+          set -o pipefail
+          node tests/check-brokers.js | tee /tmp/brokers.txt
 
       # Quelle adresse publique fonctionne réellement, sans réglage manuel ?
       - name: Choisir l'adresse publique
         id: adresse
         run: |
           set -o pipefail
+          # Ordre de préférence : GitHub Pages (la bonne adresse, dès qu'elle est
+          # activée sur le dépôt), puis les CDN qui savent servir une branche.
           node tests/sonde-urls.js \
             "https://marahsimgil-afk.github.io/March-noir-des-gages-" \
-            "https://cdn.jsdelivr.net/gh/marahsimgil-afk/March-noir-des-gages-@gh-pages" \
-            "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
             "https://cdn.statically.io/gh/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://cdn.jsdelivr.net/gh/marahsimgil-afk/March-noir-des-gages-@gh-pages" \
             | tee /tmp/sonde.txt
           echo "url=$(grep '^RETENUE=' /tmp/sonde.txt | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
 
@@ -82,11 +86,16 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Adresse publique"
+            echo "## Adresse publique retenue"
             echo ""
-            echo "\`${{ steps.adresse.outputs.url }}\`"
+            echo "\`${{ steps.adresse.outputs.url }}/index.html\`"
             echo ""
-            echo "## Brokers"
+            echo "## Brokers MQTT publics"
+            echo ""
+            echo '```'
+            cat /tmp/brokers.txt 2>/dev/null || true
+            echo '```'
+            echo "## Adresses sondées"
             echo ""
             echo '```'
             cat /tmp/sonde.txt 2>/dev/null || true

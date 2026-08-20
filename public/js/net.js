@@ -70,6 +70,11 @@
     var discoveryTimer = null;
     var gotMessage = false;
     var attemptsOnCycle = 0;
+    var essaisMemeBroker = 0;
+    // Une fois qu'un broker a effectivement porté du trafic, on s'y accroche plus
+    // longtemps : une micro-coupure de wifi ne doit pas déplacer toute la partie
+    // sur un autre serveur, ce qui obligerait chacun à se resynchroniser.
+    var brokerEprouve = false;
 
     function status(state, detail) {
       if (opts.onStatus) {
@@ -87,6 +92,25 @@
         clearTimeout(discoveryTimer);
         discoveryTimer = null;
       }
+    }
+
+    /**
+     * Replanifie une tentative : d'abord sur le même broker (une coupure est le
+     * plus souvent locale et passagère), puis sur le suivant si ça persiste.
+     */
+    function replanifier(why) {
+      if (closed) return;
+      clearDiscovery();
+      var plafond = brokerEprouve ? 4 : 1;
+      if (essaisMemeBroker < plafond) {
+        essaisMemeBroker++;
+        teardown();
+        setTimeout(connect, 800 * essaisMemeBroker);
+        return;
+      }
+      essaisMemeBroker = 0;
+      brokerEprouve = false;
+      nextBroker(why);
     }
 
     function nextBroker(why) {
@@ -133,7 +157,7 @@
           protocolVersion: 4,
         });
       } catch (e) {
-        nextBroker('Connexion impossible');
+        replanifier('Connexion impossible');
         return;
       }
 
@@ -142,16 +166,22 @@
         attemptsOnCycle = 0;
         client.subscribe(subTopic, { qos: 0 }, function (err) {
           if (err) {
-            nextBroker("Abonnement refusé");
+            replanifier('Abonnement refusé');
             return;
           }
+          essaisMemeBroker = 0;
           status('online');
           if (opts.onReady) opts.onReady();
           // Un joueur doit recevoir l'état retenu très vite. Sinon, mauvais broker.
           if (role === 'player') {
             clearDiscovery();
             discoveryTimer = setTimeout(function () {
-              if (!gotMessage && !closed) nextBroker('Partie introuvable sur ce serveur');
+              if (!gotMessage && !closed) {
+                // Silence complet : ce n'est pas une coupure, c'est le mauvais
+                // broker. On passe directement au suivant.
+                essaisMemeBroker = 0;
+                nextBroker('Partie introuvable sur ce serveur');
+              }
             }, DISCOVERY_MS);
           }
         });
@@ -160,6 +190,7 @@
       client.on('message', function (topic, payload) {
         if (closed) return;
         gotMessage = true;
+        brokerEprouve = true;
         clearDiscovery();
         var obj;
         try {
@@ -173,13 +204,13 @@
 
       client.on('error', function () {
         if (closed) return;
-        nextBroker('Erreur de connexion');
+        replanifier('Erreur de connexion');
       });
 
       client.on('close', function () {
         if (closed) return;
         status('offline', 'Connexion perdue');
-        nextBroker('Connexion fermée');
+        replanifier('Connexion fermée');
       });
     }
 
