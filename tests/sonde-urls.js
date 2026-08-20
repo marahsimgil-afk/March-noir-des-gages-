@@ -32,11 +32,12 @@ async function sonder(navigateur, base) {
     // Le bouton d'accueil est écrit en dur dans le HTML : s'il est absent, la page
     // n'a pas été rendue du tout.
     await page.waitForSelector('#btn-ouvrir-salle', { state: 'visible', timeout: 15000 });
-    // Et l'application doit avoir chargé ses scripts.
-    const pret = await page.evaluate(() => !!(window.MNG && window.MNGNet && window.mqtt));
-    resultat = pret
-      ? { base, ok: true, detail: 'page rendue, scripts chargés' }
-      : { base, ok: false, detail: 'page rendue mais scripts absents' };
+    // Et l'application doit avoir chargé ses scripts. On laisse le temps : la
+    // bibliothèque MQTT pèse 364 Ko, et certains hébergeurs la servent lentement.
+    await page.waitForFunction(() => !!(window.MNG && window.MNGNet && window.mqtt), null, {
+      timeout: 25000,
+    });
+    resultat = { base, ok: true, detail: 'page rendue, scripts chargés' };
   } catch (e) {
     resultat = { base, ok: false, detail: e.message.split('\n')[0] };
     // Ce que le navigateur a réellement affiché : c'est la seule façon de
