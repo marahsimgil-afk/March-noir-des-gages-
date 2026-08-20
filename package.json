@@ -6,7 +6,8 @@
   "scripts": {
     "bac-a-sable": "node test/serveur-test.js",
     "test": "node test/e2e.js",
-    "test:public": "node test/e2e.js --public"
+    "test:public": "node test/e2e.js --public",
+    "captures": "node test/captures.js"
   },
   "devDependencies": {
     "aedes": "^0.51.3",
