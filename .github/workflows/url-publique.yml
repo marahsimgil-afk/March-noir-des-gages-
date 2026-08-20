@@ -6,6 +6,10 @@ name: URL publique (CDN GitHub) + vérification en ligne
 # complet à trois navigateurs contre cette adresse réelle.
 
 on:
+  push:
+    branches:
+      - main
+      - claude/marche-noir-gages-app-dolp68
   workflow_dispatch:
     inputs:
       ref:
