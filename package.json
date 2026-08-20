@@ -1,0 +1,16 @@
+{
+  "name": "marche-noir-des-gages",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jeu d'encheres en gorgees : ecran central + telephones, synchronise en temps reel.",
+  "scripts": {
+    "bac-a-sable": "node test/serveur-test.js",
+    "test": "node test/e2e.js",
+    "test:public": "node test/e2e.js --public"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3",
+    "aedes-server-factory": "^0.2.1",
+    "playwright": "^1.49.0"
+  }
+}

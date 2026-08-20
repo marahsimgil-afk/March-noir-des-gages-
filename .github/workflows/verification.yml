@@ -1,0 +1,67 @@
+name: Vérification (synchronisation multi-appareils)
+
+on:
+  push:
+    branches:
+      - main
+      - claude/marche-noir-gages-app-dolp68
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL publique à tester (vide = uniquement le test hors ligne)"
+        required: false
+        default: ""
+
+jobs:
+  hors-ligne:
+    name: Scénario complet sur broker local
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Test de bout en bout (3 navigateurs isolés)
+        run: node test/e2e.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: captures-hors-ligne
+          path: /tmp/mng-*.png
+          if-no-files-found: ignore
+
+  brokers-publics:
+    name: Sonde des brokers MQTT publics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: node test/sonde-brokers.js
+
+  en-ligne:
+    name: Scénario complet sur l'URL publique
+    runs-on: ubuntu-latest
+    needs: [hors-ligne]
+    if: github.event_name == 'workflow_dispatch' && inputs.url != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Test de bout en bout contre le site en ligne
+        env:
+          URL_APP: ${{ inputs.url }}
+        run: node test/e2e.js --public
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: captures-en-ligne
+          path: /tmp/mng-*.png
+          if-no-files-found: ignore

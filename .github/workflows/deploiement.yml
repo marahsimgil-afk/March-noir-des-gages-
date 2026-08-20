@@ -1,0 +1,50 @@
+name: Déploiement (GitHub Pages)
+
+on:
+  push:
+    branches:
+      - main
+      - claude/marche-noir-gages-app-dolp68
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Activer et configurer Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Assembler le site
+        run: |
+          mkdir -p _site/vendor
+          cp index.html solo.html style.css app.js _site/
+          cp vendor/mqtt.min.js vendor/qrcode.js _site/vendor/
+          # Empêche Jekyll de filtrer quoi que ce soit.
+          touch _site/.nojekyll
+          ls -R _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploiement
+        uses: actions/deploy-pages@v4
+
+      - name: Adresse publique
+        run: echo "URL_PUBLIQUE=${{ steps.deploiement.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

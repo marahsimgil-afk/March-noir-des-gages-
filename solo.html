@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<title>Marché Noir des Gages — mode secours</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="vendor/qrcode.js"></script>
+<script>
+/* Mode secours : tout se joue sur un seul écran, sans réseau.
+   L'organisatrice tient l'appareil et tape les mises annoncées à voix haute. */
+(function () {
+'use strict';
+
+var GAGES = [
+  "Désigner qui porte un chapeau ridicule toute la soirée",
+  "Désigner qui doit raconter sa pire honte amoureuse",
+  "Désigner qui doit danser seul au milieu du groupe",
+  "Désigner qui parle avec un accent imposé pendant 20 minutes",
+  "Désigner qui lit à voix haute son dernier message envoyé",
+  "Désigner qui devient le serveur du groupe pendant 15 minutes",
+  "Le droit d'imposer un surnom à quelqu'un pour le reste des vacances",
+  "Désigner qui doit faire un discours d'une minute sur un sujet imposé",
+  "Désigner qui n'a plus le droit de dire « non » pendant 30 minutes",
+  "Désigner qui imite quelqu'un du groupe jusqu'à ce qu'on devine",
+  "Le droit de faire boire 3 gorgées à qui tu veux",
+  "Désigner qui range la cuisine demain matin",
+  "Le droit d'échanger de tenue avec quelqu'un pendant 30 minutes",
+  "Désigner qui doit répondre à toutes les questions en chantant pendant 10 minutes"
+];
+var DUREES = [20, 30, 45, 60];
+
+function h(tag, attrs, enfants) {
+  var e = document.createElement(tag);
+  if (attrs) for (var k in attrs) {
+    var v = attrs[k];
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  if (enfants) {
+    if (!Array.isArray(enfants)) enfants = [enfants];
+    enfants.forEach(function (c) {
+      if (c === null || c === undefined || c === false) return;
+      e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+  }
+  return e;
+}
+function vider(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lire(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function ecrire(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function gorgees(n) { return n + (n > 1 ? ' gorgées' : ' gorgée'); }
+
+var S = lire('mng.solo') || { joueurs: [], ardoise: {}, hist: [] };
+var lot = null, minuteur = null;
+var app = document.getElementById('app');
+
+function sauver() { ecrire('mng.solo', S); }
+
+function enseigne(p) {
+  return h('div', { class: 'enseigne' }, [
+    h('span', { class: 'petit', text: p || 'Mode secours — un seul écran' }),
+    h('span', { class: 'gros', text: 'Le Marché Noir' }),
+    h('span', { class: 'gros', text: 'des Gages' }),
+    h('span', { class: 'filet' })
+  ]);
+}
+
+function ecranNoms() {
+  var champs = [], zone = h('div', { class: 'pile g8' });
+  function add(v) {
+    var i = h('input', { class: 'champ', placeholder: 'Prénom ' + (champs.length + 1), value: v || '', maxlength: '18' });
+    champs.push(i); zone.appendChild(i); return i;
+  }
+  var dep = (lire('mng.noms') || ['', '', '', '', '', '', '', '', '']);
+  dep.forEach(add);
+  vider(app);
+  app.appendChild(h('div', { class: 'vue' }, [h('div', { class: 'centre' }, [
+    enseigne(),
+    h('div', { class: 'carton dore', style: 'width:min(520px,100%);text-align:left' }, [
+      h('div', { class: 'etiquette', style: 'margin-bottom:12px' }, 'Les participants'),
+      zone,
+      h('button', { class: 'btn fantome mini', style: 'margin-top:10px', onclick: function () { add('').focus(); } }, '+ Ajouter')
+    ]),
+    h('button', {
+      class: 'btn or large', style: 'width:min(520px,100%)',
+      onclick: function () {
+        var noms = champs.map(function (c) { return c.value.trim(); }).filter(Boolean);
+        if (noms.length < 2) return;
+        ecrire('mng.noms', noms);
+        S.joueurs = noms.map(function (n, i) { return { id: 'j' + i, nom: n }; });
+        S.ardoise = {}; S.hist = [];
+        sauver(); ecranTable();
+      }
+    }, 'Commencer'),
+    h('a', { class: 'tres-discret', href: 'index.html', style: 'color:inherit' }, '← Revenir au mode multi-téléphones')
+  ])]));
+}
+
+function ecranTable() {
+  vider(app);
+  var racine = h('div', { class: 'vue' });
+  app.appendChild(racine);
+  dessiner(racine);
+}
+
+function dessiner(racine) {
+  vider(racine);
+  var plateau = h('div', { class: 'plateau' });
+  var gauche = h('div', { class: 'colonne' }), droite = h('div', { class: 'colonne' });
+  plateau.appendChild(gauche); plateau.appendChild(droite);
+  racine.appendChild(plateau);
+
+  if (!lot) {
+    gauche.appendChild(panneauChoix(racine));
+  } else if (lot.statut === 'ouvert') {
+    gauche.appendChild(panneauEnchere(racine));
+  } else {
+    gauche.appendChild(panneauAdjuge(racine));
+  }
+  droite.appendChild(panneauArdoise(racine));
+  if (S.hist.length) droite.appendChild(panneauHist());
+}
+
+function panneauChoix(racine) {
+  var libre = h('input', { class: 'champ', placeholder: 'Écrire un gage sur mesure…', maxlength: '140' });
+  var liste = h('div', { class: 'scroll-zone', style: 'margin-top:10px' });
+  var choix = '';
+  var duree = lire('mng.duree') || 30;
+  var seg = h('div', { class: 'segmente', style: 'margin-top:10px' });
+  var lancer = h('button', { class: 'btn or large', style: 'margin-top:14px', disabled: true }, 'Mettre en vente');
+
+  DUREES.forEach(function (d) {
+    var b = h('button', { 'aria-pressed': String(d === duree), text: d + ' s' });
+    b.onclick = function () {
+      duree = d; ecrire('mng.duree', d);
+      Array.prototype.forEach.call(seg.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+      b.setAttribute('aria-pressed', 'true');
+    };
+    seg.appendChild(b);
+  });
+  GAGES.forEach(function (g) {
+    var b = h('button', { class: 'puce-gage', text: g });
+    b.onclick = function () {
+      choix = g; libre.value = '';
+      Array.prototype.forEach.call(liste.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+      b.setAttribute('aria-pressed', 'true');
+      lancer.disabled = false;
+    };
+    liste.appendChild(b);
+  });
+  libre.oninput = function () {
+    choix = libre.value.trim();
+    Array.prototype.forEach.call(liste.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+    lancer.disabled = !choix;
+  };
+  lancer.onclick = function () {
+    lot = { titre: choix, statut: 'ouvert', duree: duree * 1000, fin: Date.now() + duree * 1000, offres: {}, meneur: null, montant: 0 };
+    dessiner(racine);
+  };
+
+  return h('div', { class: 'carton' }, [
+    h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Lot suivant'),
+    libre,
+    h('button', {
+      class: 'btn fantome mini', style: 'margin-top:8px',
+      onclick: function () {
+        var i = Math.floor(Math.random() * GAGES.length);
+        choix = GAGES[i]; libre.value = '';
+        Array.prototype.forEach.call(liste.children, function (x, k) { x.setAttribute('aria-pressed', String(k === i)); });
+        liste.children[i].scrollIntoView({ block: 'nearest' });
+        lancer.disabled = false;
+      }
+    }, '🎲 Piocher au hasard'),
+    liste,
+    h('div', { class: 'etiquette', style: 'margin-top:14px' }, 'Durée du marteau'),
+    seg, lancer
+  ]);
+}
+
+function panneauEnchere(racine) {
+  var min = h('div', { class: 'minuteur', style: 'font-size:clamp(40px,11vw,84px)' }, '--');
+  var jauge = h('div', { class: 'jauge' }, [h('i')]);
+  var montant = h('div', { class: 'montant-geant', style: 'font-size:clamp(38px,11vw,72px)' }, '—');
+  var meneur = h('div', { class: 'meneur-nom' }, ' ');
+
+  function maj() {
+    montant.textContent = lot.meneur ? String(lot.montant) : '—';
+    meneur.textContent = lot.meneur ? nomDe(lot.meneur) : 'Aucune offre';
+  }
+  function miser(pid, n) {
+    lot.montant = (lot.montant || 0) + n;
+    lot.offres[pid] = lot.montant;
+    lot.meneur = pid;
+    var reste = lot.fin - Date.now();
+    if (reste > 0 && reste < 3000) lot.fin = Date.now() + 3000;
+    maj();
+    Array.prototype.forEach.call(lignes.children, function (el) {
+      var id = el.getAttribute('data-pid');
+      el.classList.toggle('meneur', id === lot.meneur);
+      el.querySelector('.val').textContent = lot.offres[id] ? String(lot.offres[id]) : '·';
+    });
+  }
+
+  var lignes = h('div', {}, S.joueurs.map(function (j) {
+    var val = h('span', { class: 'val chiffre' }, '·');
+    var l = h('div', { class: 'ligne', 'data-pid': j.id }, [
+      h('span', { class: 'nom' }, j.nom),
+      val,
+      h('button', { class: 'btn mini', style: 'margin-left:10px', onclick: function () { miser(j.id, 1); } }, '+1'),
+      h('button', { class: 'btn mini or', onclick: function () { miser(j.id, 5); } }, '+5')
+    ]);
+    return l;
+  }));
+
+  clearInterval(minuteur);
+  minuteur = setInterval(function () {
+    var reste = Math.max(0, lot.fin - Date.now());
+    var s = Math.ceil(reste / 1000);
+    min.textContent = s < 10 ? '0' + s : String(s);
+    min.classList.toggle('urgent', reste <= 5000);
+    jauge.firstChild.style.width = Math.max(0, (reste / lot.duree) * 100) + '%';
+    jauge.classList.toggle('urgent', reste <= 5000);
+    if (reste <= 0) { clearInterval(minuteur); lot.statut = 'adjuge'; dessiner(racine); }
+  }, 200);
+
+  maj();
+  return h('div', { class: 'carton dore', style: 'text-align:center' }, [
+    h('div', { class: 'etiquette' }, 'Enchère ouverte'),
+    h('div', { class: 'gage-titre', style: 'margin:12px 0 16px' }, lot.titre),
+    min, h('div', { class: 'etiquette', style: 'margin:2px 0 12px' }, 'secondes'), jauge,
+    h('hr', { class: 'filet-or' }),
+    montant, meneur,
+    h('div', { style: 'margin-top:16px;text-align:left' }, [lignes]),
+    h('button', {
+      class: 'btn fantome mini', style: 'margin-top:14px',
+      onclick: function () { clearInterval(minuteur); lot.statut = 'adjuge'; dessiner(racine); }
+    }, 'Adjuger maintenant')
+  ]);
+}
+
+function panneauAdjuge(racine) {
+  var g = lot.meneur;
+  return h('div', { class: 'carton dore', style: 'text-align:center' }, [
+    h('div', { style: 'margin:6px 0 16px' }, [h('span', { class: 'tampon' }, g ? 'Adjugé' : 'Invendu')]),
+    h('div', { class: 'gage-titre', style: 'margin-bottom:16px' }, lot.titre),
+    g ? h('div', {}, [
+      h('div', { class: 'meneur-nom', style: 'font-size:clamp(22px,5vw,36px)' }, nomDe(g)),
+      h('div', { class: 'montant-geant', style: 'font-size:clamp(34px,9vw,64px)' }, String(lot.montant)),
+      h('div', { class: 'etiquette' }, 'gorgées')
+    ]) : h('p', { class: 'discret' }, 'Personne n’a misé.'),
+    h('button', {
+      class: 'btn or large', style: 'margin-top:20px',
+      onclick: function () {
+        if (g) {
+          S.ardoise[g] = (S.ardoise[g] || 0) + lot.montant;
+          S.hist.unshift({ titre: lot.titre, pid: g, montant: lot.montant });
+          if (S.hist.length > 40) S.hist.length = 40;
+        }
+        lot = null; sauver(); dessiner(racine);
+      }
+    }, g ? 'Valider et inscrire à l’ardoise' : 'Retirer le lot')
+  ]);
+}
+
+function panneauArdoise(racine) {
+  var classement = S.joueurs.slice().sort(function (a, b) { return (S.ardoise[b.id] || 0) - (S.ardoise[a.id] || 0); });
+  var total = 0; S.joueurs.forEach(function (j) { total += (S.ardoise[j.id] || 0); });
+  return h('div', { class: 'carton dore' }, [
+    h('div', { class: 'rangee', style: 'margin-bottom:12px' }, [
+      h('div', { class: 'etiquette' }, 'L’ardoise'),
+      h('div', { class: 'etiquette pousse' }, total + ' gorgées au total')
+    ]),
+    h('div', {}, classement.map(function (j, i) {
+      var l = h('div', { class: 'ligne' }, [
+        h('span', { class: 'rang' }, String(i + 1)),
+        h('span', { class: 'nom' }, j.nom),
+        h('span', { class: 'val chiffre' }, String(S.ardoise[j.id] || 0)),
+        h('button', {
+          class: 'btn mini fantome', style: 'margin-left:10px',
+          onclick: function () {
+            S.ardoise[j.id] = Math.max(0, (S.ardoise[j.id] || 0) - 1);
+            sauver(); dessiner(racine);
+          }
+        }, '− bu')
+      ]);
+      return l;
+    })),
+    h('button', {
+      class: 'btn fantome mini', style: 'margin-top:12px',
+      onclick: function () { if (confirm('Repartir de zéro ?')) { S = { joueurs: [], ardoise: {}, hist: [] }; sauver(); ecranNoms(); } }
+    }, 'Nouvelle partie')
+  ]);
+}
+
+function panneauHist() {
+  return h('div', { class: 'carton' }, [
+    h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Lots vendus'),
+    h('div', { class: 'scroll-zone' }, S.hist.map(function (x) {
+      return h('div', { class: 'ligne', style: 'align-items:flex-start' }, [
+        h('span', { class: 'pile', style: 'flex:1;min-width:0' }, [
+          h('span', { class: 'nom', style: 'font-size:14px' }, nomDe(x.pid)),
+          h('span', { class: 'tres-discret', style: 'margin-top:2px' }, x.titre)
+        ]),
+        h('span', { class: 'val chiffre or' }, String(x.montant))
+      ]);
+    }))
+  ]);
+}
+
+function nomDe(pid) {
+  for (var i = 0; i < S.joueurs.length; i++) if (S.joueurs[i].id === pid) return S.joueurs[i].nom;
+  return '???';
+}
+
+if (S.joueurs.length) ecranTable(); else ecranNoms();
+})();
+</script>
+</body>
+</html>
