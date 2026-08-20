@@ -68,6 +68,20 @@ async function attendre(page, selecteur, predicat, delaiMax = 15000, libelle = '
   throw new Error(`délai dépassé sur « ${selecteur} » ${libelle} — dernier texte vu : « ${dernier.trim()} »`);
 }
 
+/* Attend qu'au moins `mini` éléments correspondent au sélecteur. */
+async function attendreNombre(page, selecteur, mini, delaiMax = 20000, libelle = '') {
+  const t0 = Date.now();
+  let vu = 0;
+  while (Date.now() - t0 < delaiMax) {
+    try {
+      vu = await page.$$eval(selecteur, (l) => l.length);
+      if (vu >= mini) return { ms: Date.now() - t0, nombre: vu };
+    } catch (e) { /* navigation en cours */ }
+    await dors(50);
+  }
+  throw new Error(`délai dépassé : ${vu}/${mini} « ${selecteur} » ${libelle}`);
+}
+
 async function nouvelEcran(navigateur, taille) {
   const contexte = await navigateur.newContext({
     viewport: taille,
@@ -177,10 +191,11 @@ async function principal() {
       ok(`${nom} a rejoint depuis son téléphone`);
     }
 
-    // L'écran central doit les voir en ligne.
-    await attendre(tv.page, '.carton.dore .ligne .pastille-x.on', () => true, 15000, '(présence)');
-    const enLigne = await tv.page.$$eval('.pastille-x.on', (l) => l.length);
-    verifier(enLigne >= 2, 'les deux joueurs apparaissent connectés sur l’écran central', `${enLigne} pastilles vertes`);
+    // L'écran central doit les voir en ligne (la présence remonte via l'état,
+    // donc on attend au lieu de photographier un instant précis).
+    const presence = await attendreNombre(tv.page, '.pastille-x.on', 2, 25000, '(présence sur la TV)');
+    ok('les deux joueurs apparaissent connectés sur l’écran central',
+      `${presence.nombre} pastilles vertes en ${presence.ms} ms`);
 
     /* ---------- 3. Mise en vente ---------- */
     titre('3. Mise en vente d’un lot');
