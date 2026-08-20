@@ -76,6 +76,13 @@ soirées, il suffit d'ouvrir une nouvelle salle : elle basculera toute seule sur
 un autre. Cette liste n'est pas choisie au jugé : `test/sonde-brokers.js` vérifie
 en continu que chacun accepte connexion, publication *retained* et abonnement.
 
+**Ce qu'il faut savoir** : les brokers publics sont ouverts à tous. Les prénoms
+et les ardoises transitent donc en clair sous un sujet tiré au hasard (5
+caractères, plus de 30 millions de combinaisons) : personne ne tombera dessus
+par accident, mais ce n'est pas un canal secret. Pour un jeu à boire entre
+amis, c'est le bon compromis ; n'y mettez pas de gages que vous ne diriez pas
+à voix haute.
+
 **Ce qui est visible en cas de panne** : un bandeau en haut de l'écran indique
 `Ligne sécurisée` / `Connexion au marché…` / `Hors ligne`, et les téléphones
 préviennent explicitement si l'écran central se déconnecte.
