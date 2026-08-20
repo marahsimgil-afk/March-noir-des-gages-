@@ -25,12 +25,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Le jeton d'Actions n'a pas toujours le droit de créer le site Pages.
+      # Dans ce cas, il faut l'activer une fois à la main dans
+      # Settings → Pages → Source : « GitHub Actions ». Le workflow s'arrête
+      # proprement au lieu d'échouer.
       - name: Activer et configurer Pages
+        id: pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
+      - name: Pages non activé
+        if: steps.pages.outcome != 'success'
+        run: |
+          {
+            echo "### GitHub Pages n'est pas encore activé"
+            echo ""
+            echo "Active-le une fois dans **Settings → Pages → Source : GitHub Actions**,"
+            echo "puis relance ce workflow. En attendant, l'application reste accessible"
+            echo "via le workflow « URL publique (CDN GitHub) »."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Assembler le site
+        if: steps.pages.outcome == 'success'
         run: |
           mkdir -p _site/vendor
           cp index.html solo.html style.css app.js _site/
@@ -40,11 +58,14 @@ jobs:
           ls -R _site
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outcome == 'success'
         with:
           path: _site
 
       - id: deploiement
+        if: steps.pages.outcome == 'success'
         uses: actions/deploy-pages@v4
 
       - name: Adresse publique
+        if: steps.pages.outcome == 'success'
         run: echo "URL_PUBLIQUE=${{ steps.deploiement.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
