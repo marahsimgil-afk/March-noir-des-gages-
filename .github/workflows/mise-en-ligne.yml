@@ -78,6 +78,7 @@ jobs:
             "https://cdn.statically.io/gh/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
             "https://raw.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
             "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://htmlpreview.github.io/?https://raw.githubusercontent.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
             | tee /tmp/sonde.txt
           url="$(grep '^RETENUE=' /tmp/sonde.txt | cut -d= -f2-)"
           if [ -n "$url" ]; then

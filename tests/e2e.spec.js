@@ -81,9 +81,18 @@ async function lancerLot(tv, titre) {
   await expect(tv.locator('#vue-enchere')).toBeVisible();
 }
 
-/** Tape n fois sur le bouton d'enchère, aussi vite que possible. */
+/**
+ * Tape n fois sur le bouton d'enchère, aussi vite que possible.
+ *
+ * On attend d'abord que CE téléphone ait reçu l'ouverture du lot. Sans cela, sur
+ * un vrai réseau, le test tape pendant les quelques centaines de millisecondes
+ * où l'écran du joueur est encore en salle d'attente : le bouton est alors
+ * masqué (donc invisible pour un humain) mais reste « enabled » aux yeux de
+ * Playwright, et les mises partent dans le vide.
+ */
 async function taper(page, n, selecteur) {
   const sel = selecteur || '#btn-plus-un';
+  await expect(page.locator('#jv-enchere')).toBeVisible({ timeout: PATIENCE });
   await expect(page.locator(sel)).toBeEnabled({ timeout: PATIENCE });
   for (let i = 0; i < n; i++) await page.locator(sel).dispatchEvent('pointerdown');
 }

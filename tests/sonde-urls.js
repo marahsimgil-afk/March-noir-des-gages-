@@ -39,9 +39,21 @@ async function sonder(navigateur, base) {
       : { base, ok: false, detail: 'page rendue mais scripts absents' };
   } catch (e) {
     resultat = { base, ok: false, detail: e.message.split('\n')[0] };
+    // Ce que le navigateur a réellement affiché : c'est la seule façon de
+    // distinguer un interstitiel du CDN d'une page servie en texte brut.
+    try {
+      const recu = await page.evaluate(() => ({
+        titre: document.title,
+        debut: (document.body ? document.body.innerText : '').slice(0, 160).replace(/\s+/g, ' '),
+      }));
+      diagnostic.push('titre : « ' + recu.titre + ' »');
+      diagnostic.push('affiché : « ' + recu.debut + ' »');
+    } catch (e2) {
+      /* page inutilisable, on s'en tient au message d'erreur */
+    }
   }
 
-  resultat.diagnostic = diagnostic.slice(0, 3);
+  resultat.diagnostic = diagnostic.slice(0, 5);
   await page.close();
   return resultat;
 }
