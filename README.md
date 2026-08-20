@@ -5,7 +5,27 @@ droit — est mis en vente ; chacun enchérit **en gorgées de bière**, sans pl
 depuis son téléphone. Le plus offrant remporte le lot et désigne qui exécute le
 gage. Son ardoise s'alourdit d'autant.
 
-**L'application est en ligne ici : https://marahsimgil-afk.github.io/March-noir-des-gages-/**
+## L'adresse de l'application
+
+```
+https://htmlpreview.github.io/?https://raw.githubusercontent.com/marahsimgil-afk/March-noir-des-gages-/gh-pages/index.html
+```
+
+Elle fonctionne telle quelle : c'est l'adresse contre laquelle la suite de tests
+multi-appareils est passée en entier, sur les vrais serveurs de synchronisation.
+
+**Une adresse plus courte, en 30 secondes.** GitHub Pages n'a pas pu être activé
+automatiquement (le jeton dont dispose l'automatisation n'en a pas le droit).
+Dans le dépôt : *Settings* → *Pages* → *Source* : « Deploy from a branch » →
+branche `gh-pages`, dossier `/ (root)` → *Save*. Après une minute, l'application
+répond aussi — et plus vite, sans intermédiaire — sur :
+
+```
+https://marahsimgil-afk.github.io/March-noir-des-gages-/
+```
+
+La branche `gh-pages` est déjà publiée et tenue à jour à chaque modification ;
+il n'y a rien d'autre à faire.
 
 ---
 
@@ -24,17 +44,22 @@ gage. Son ardoise s'alourdit d'autant.
 Si le voyant en haut à gauche de la TV est **vert**, tout le monde est synchronisé.
 S'il passe au rouge, l'écran l'explique en clair.
 
-**Filet de sécurité :** en cas de wifi impraticable,
-[la version mono-écran](https://marahsimgil-afk.github.io/March-noir-des-gages-/solo.html)
-fonctionne sans aucune connexion — un seul appareil circule.
+**Filet de sécurité :** en cas de wifi impraticable, la version mono-écran
+fonctionne sans aucune connexion — un seul appareil circule. Même adresse en
+remplaçant `index.html` par `solo.html`.
 
 ---
 
 ## Comment ça marche
 
-Site statique sur GitHub Pages ; synchronisation temps réel en **MQTT sur
-WebSocket** via des brokers publics (aucun compte à créer, ça passe en 4G comme
-derrière le wifi d'une location).
+Site statique servi depuis la branche `gh-pages` ; synchronisation temps réel en
+**MQTT sur WebSocket** via des brokers publics (aucun compte à créer, ça passe en
+4G comme derrière le wifi d'une location).
+
+Ce que cela implique côté vie privée : les prénoms, les gages et les montants
+transitent en clair par un serveur public partagé. Le code de salle à cinq
+caractères rend une écoute fortuite très improbable, mais ce n'est pas un
+secret — n'y mettez rien que vous ne diriez pas à voix haute dans le salon.
 
 L'**écran central fait autorité** : lui seul modifie l'état de la partie. Les
 téléphones lui envoient des commandes idempotentes et reçoivent des instantanés
@@ -76,6 +101,8 @@ propagation d'une mise, égalité départagée par l'ordre d'arrivée, rafale de
 téléphones simultanés, coupure réseau et reprise, retardataire, rechargement de
 la TV, clôture automatique au minuteur, et la version de secours.
 
-Le workflow **Vérification en conditions réelles** rejoue cette même suite depuis
-un runner GitHub contre l'URL publique et les vrais brokers, chaque semaine et
-après chaque déploiement.
+Le workflow **Mise en ligne et vérification réelle** publie le site puis rejoue
+cette même suite depuis un runner GitHub contre l'adresse publique et les vrais
+brokers — l'environnement de développement, lui, n'a accès qu'à GitHub et npm.
+Il tourne à chaque modification et une fois par semaine : si un broker public
+tombait d'ici la soirée, l'échec le signalerait avant le jour J.
