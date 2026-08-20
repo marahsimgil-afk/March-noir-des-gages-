@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#08080a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Le Marché Noir des Gages — enchères clandestines en gorgées, pour une soirée entre amis.">
+<title>Le Marché Noir des Gages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2308080a'/><text y='72' x='50' text-anchor='middle' font-size='64' fill='%23c9a227'>%E2%9A%92</text></svg>">
+</head>
+<body>
+
+<!-- =========================================================== ACCUEIL === -->
+<section id="ecr-accueil" class="screen on">
+  <div class="wrap" style="max-width:620px">
+    <div class="enseigne">
+      <div class="sur">Vente aux enchères clandestine</div>
+      <h1>Le Marché<br>Noir des Gages</h1>
+      <div class="filets"><span>On mise en gorgées</span></div>
+    </div>
+
+    <div class="gap-col">
+      <div class="carton or">
+        <div class="etiquette">Pour l'organisatrice</div>
+        <p class="discret mb">Sur le téléphone ou la tablette branchée à la TV. C'est cet écran qui mène la vente.</p>
+        <button class="primaire" id="btn-ouvrir-salle" style="width:100%">Ouvrir la salle des ventes</button>
+      </div>
+
+      <div class="carton">
+        <div class="etiquette">Pour les enchérisseurs</div>
+        <p class="discret mb">Scannez le QR code affiché sur la TV. Ou entrez le code de la salle&nbsp;:</p>
+        <div class="rangee">
+          <input type="text" id="champ-code" placeholder="CODE" maxlength="5" autocapitalize="characters"
+                 autocomplete="off" spellcheck="false" style="flex:1;text-transform:uppercase;font-family:var(--mono);letter-spacing:0.25em">
+          <button id="btn-rejoindre">Entrer</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="pied-sobre">
+      Jeu à boire entre adultes consentants. Buvez de l'eau, gardez le sens de l'humour,<br>
+      et personne n'est obligé d'aller au bout de son ardoise.
+    </p>
+  </div>
+</section>
+
+<!-- ====================================================== INSTALLATION === -->
+<section id="ecr-install" class="screen">
+  <div class="wrap" style="max-width:760px">
+    <div class="enseigne" style="padding:3vh 0 2vh">
+      <div class="sur">Registre des enchérisseurs</div>
+      <h1 style="font-size:clamp(1.6rem,4vw,2.6rem)">Qui participe&nbsp;?</h1>
+    </div>
+
+    <div class="carton or">
+      <div class="etiquette">Les prénoms</div>
+      <p class="discret mb">Un prénom par case. Laissez vide les cases inutiles.</p>
+      <div class="noms-grille" id="grille-noms"></div>
+      <div class="rangee mt">
+        <button class="fantome" id="btn-ajouter-nom">+ une place</button>
+      </div>
+    </div>
+
+    <div class="carton mt">
+      <div class="etiquette">Durée d'une enchère</div>
+      <div class="rangee" id="choix-duree"></div>
+    </div>
+
+    <div id="install-erreur"></div>
+
+    <div class="rangee mt">
+      <button class="primaire" id="btn-lancer-salle" style="flex:1">Ouvrir la salle</button>
+      <button class="fantome" id="btn-retour-accueil">Retour</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= ÉCRAN CENTRAL === -->
+<section id="ecr-central" class="screen">
+  <div class="wrap">
+    <header style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+      <div>
+        <div class="sur" style="font-family:var(--mono);font-size:0.6rem;letter-spacing:0.36em;color:var(--or);text-transform:uppercase">Marché Noir des Gages</div>
+        <div class="statut mt" id="statut-central" data-etat="connecting" style="margin-top:6px">
+          <i class="pastille"></i><span id="statut-central-txt">Connexion…</span>
+        </div>
+      </div>
+      <div class="rangee">
+        <button class="fantome" id="btn-qr">Afficher le QR code</button>
+        <button class="fantome" id="btn-fin">Terminer</button>
+      </div>
+    </header>
+
+    <div id="central-alerte"></div>
+
+    <div class="central-grille">
+      <!-- Scène principale -->
+      <div class="gap-col">
+        <div class="carton or scene" id="scene">
+          <!-- Repos : choix du lot -->
+          <div id="vue-repos">
+            <div class="etiquette centrer">Lot à mettre en vente</div>
+            <textarea id="champ-gage" rows="2" placeholder="Tapez un gage, ou choisissez ci-dessous…"
+                      style="font-family:var(--serif);font-size:1.15rem;text-align:center"></textarea>
+            <div class="rangee mt" style="justify-content:center">
+              <button class="fantome" id="btn-tirer-gage">Tirer un gage au sort</button>
+              <button class="primaire" id="btn-lancer-enchere">Ouvrir les enchères</button>
+            </div>
+            <div class="mt liste-gages" id="liste-gages"></div>
+          </div>
+
+          <!-- Enchère ouverte -->
+          <div id="vue-enchere" style="display:none">
+            <div class="etiquette centrer">Lot en vente</div>
+            <div class="lot-titre" id="central-lot"></div>
+            <div class="minuteur mono mt" id="central-minuteur">00</div>
+            <div class="jauge" id="central-jauge"><i style="width:100%"></i></div>
+            <div class="meneur-bloc mt" id="central-meneur"></div>
+            <div class="encheres mt" id="central-encheres"></div>
+            <div class="rangee mt" style="justify-content:center">
+              <button class="fantome" id="btn-clore">Clore maintenant</button>
+              <button class="danger" id="btn-annuler-lot">Annuler le lot</button>
+            </div>
+          </div>
+
+          <!-- Adjugé -->
+          <div id="vue-adjuge" style="display:none">
+            <div class="tampon" id="tampon-adjuge">Adjugé</div>
+            <div class="lot-titre mt" id="adjuge-lot"></div>
+            <div class="meneur-bloc mt" id="adjuge-qui"></div>
+            <p class="discret" id="adjuge-consigne"></p>
+            <div class="rangee mt" style="justify-content:center">
+              <button class="primaire" id="btn-encaisser">Valider — porter à l'ardoise</button>
+              <button class="danger" id="btn-annuler-vente">Annuler la vente</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colonne latérale -->
+      <div class="gap-col">
+        <div class="carton">
+          <div class="etiquette">Les ardoises — gorgées dues</div>
+          <div id="central-ardoises"></div>
+        </div>
+        <div class="carton">
+          <div class="etiquette">Lots vendus</div>
+          <div id="central-histo"><p class="discret">Aucune vente pour l'instant.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="pied-sobre">Buvez de l'eau entre deux lots. L'ardoise est un jeu, pas une dette.</p>
+  </div>
+</section>
+
+<!-- ============================================================ MODALE QR === -->
+<div class="modale" id="modale-qr">
+  <div class="modale-boite">
+    <div class="etiquette centrer">Scannez pour enchérir</div>
+    <div class="qr-boite mb" id="qr-cible" style="width:min(62vw,340px)"></div>
+    <div class="discret">Ou allez sur <b id="qr-url-txt" style="color:var(--or-clair)"></b> et entrez le code&nbsp;:</div>
+    <div class="code-session mt" id="qr-code-txt"></div>
+    <button class="primaire mt" id="btn-fermer-qr" style="min-width:200px">Fermer</button>
+  </div>
+</div>
+
+<!-- ================================================== TÉLÉPHONE : IDENTITÉ === -->
+<section id="ecr-identite" class="screen">
+  <div class="wrap" style="max-width:560px">
+    <div class="enseigne" style="padding:3vh 0 2vh">
+      <div class="sur">Salle <span id="identite-code" class="mono"></span></div>
+      <h1 style="font-size:clamp(1.7rem,6vw,2.4rem)">Qui es-tu&nbsp;?</h1>
+    </div>
+    <div class="statut mb" id="statut-identite" data-etat="connecting" style="justify-content:center">
+      <i class="pastille"></i><span id="statut-identite-txt">Connexion à la salle…</span>
+    </div>
+    <div id="identite-alerte"></div>
+    <div class="noms-liste" id="liste-identites"></div>
+    <p class="pied-sobre">Tape ton prénom. Si tu te trompes, recharge la page.</p>
+  </div>
+</section>
+
+<!-- ==================================================== TÉLÉPHONE : JEU === -->
+<section id="ecr-joueur" class="screen">
+  <div class="tel">
+    <div class="tel-entete">
+      <div class="tel-moi" id="joueur-nom">—</div>
+      <div class="statut" id="statut-joueur" data-etat="connecting">
+        <i class="pastille"></i><span id="statut-joueur-txt">…</span>
+      </div>
+    </div>
+
+    <div id="joueur-alerte"></div>
+
+    <div class="tel-corps">
+      <!-- Attente -->
+      <div id="jv-attente">
+        <div class="etiquette centrer">En attente</div>
+        <p class="tel-lot">Le prochain lot va être présenté.<br>Garde ton téléphone en main.</p>
+      </div>
+
+      <!-- Enchère -->
+      <div id="jv-enchere" style="display:none">
+        <div class="tel-lot mb" id="joueur-lot"></div>
+        <div class="tel-minuteur mono" id="joueur-minuteur">00</div>
+        <div class="jauge mt mb" id="joueur-jauge"><i style="width:100%"></i></div>
+        <div class="tel-meneur mb" id="joueur-meneur"></div>
+        <div class="ma-mise mb" id="joueur-ma-mise"></div>
+        <button class="bouton-enchere" id="btn-plus-un">
+          +1 gorgée
+          <small>tape autant que tu veux</small>
+        </button>
+        <button class="bouton-cinq mt" id="btn-plus-cinq">+5 d'un coup</button>
+      </div>
+
+      <!-- Résultat -->
+      <div id="jv-resultat" style="display:none">
+        <div class="etiquette centrer">Résultat</div>
+        <div class="tel-lot mb" id="joueur-res-lot"></div>
+        <div id="joueur-res-qui"></div>
+      </div>
+    </div>
+
+    <div class="tel-pied">
+      <span>Mon ardoise</span>
+      <span><b class="mono" id="joueur-ardoise">0</b> gorgées</span>
+    </div>
+  </div>
+</section>
+
+<script src="vendor/mqtt.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="js/game.js"></script>
+<script src="js/net.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/central.js"></script>
+<script src="js/player.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

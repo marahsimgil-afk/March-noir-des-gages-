@@ -1,0 +1,55 @@
+name: Vérification en conditions réelles
+
+# Rejoue toute la suite multi-appareils contre le site réellement déployé et les
+# brokers MQTT publics — c'est-à-dire exactement ce que verront les téléphones le
+# soir J. Le runner GitHub dispose d'un accès Internet complet, ce qui n'est pas
+# le cas de l'environnement de développement.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL publique à tester'
+        required: false
+        default: 'https://marahsimgil-afk.github.io/March-noir-des-gages-'
+  workflow_run:
+    workflows: ['Déployer sur GitHub Pages']
+    types: [completed]
+  schedule:
+    # Un contrôle hebdomadaire : si un broker public tombe d'ici la soirée,
+    # l'échec du job le signalera avant le jour J.
+    - cron: '17 9 * * 1'
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci || npm install
+
+      - name: Tests unitaires des règles
+        run: node tests/unit-game.js
+
+      - name: Installer Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Diagnostic des brokers MQTT publics
+        run: node tests/check-brokers.js
+
+      - name: Suite multi-appareils contre l'infra publique
+        env:
+          MNG_BASE: ${{ github.event.inputs.url || 'https://marahsimgil-afk.github.io/March-noir-des-gages-' }}
+          MNG_WS: ''
+        run: npx playwright test --reporter=list
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: traces-playwright
+          path: test-results/
+          retention-days: 7

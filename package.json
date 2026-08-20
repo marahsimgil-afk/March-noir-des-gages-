@@ -1,0 +1,25 @@
+{
+  "name": "marche-noir-des-gages",
+  "version": "1.0.0",
+  "description": "Jeu d'enchères en gorgées pour une soirée entre amis : un écran central sur la TV, un téléphone par joueur.",
+  "private": true,
+  "scripts": {
+    "start": "node tests/serve.js",
+    "test": "node tests/unit-game.js && playwright test",
+    "test:unit": "node tests/unit-game.js",
+    "test:e2e": "playwright test",
+    "test:reel": "playwright test",
+    "brokers": "node tests/check-brokers.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marahsimgil-afk/March-noir-des-gages-.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "aedes": "^1.1.1",
+    "mqtt": "^5.15.2",
+    "ws": "^8.21.3"
+  }
+}
