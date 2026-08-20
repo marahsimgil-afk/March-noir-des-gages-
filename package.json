@@ -11,6 +11,7 @@
   "devDependencies": {
     "aedes": "^0.51.3",
     "aedes-server-factory": "^0.2.1",
+    "mqtt": "^5.15.2",
     "playwright": "^1.49.0"
   }
 }
