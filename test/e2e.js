@@ -15,7 +15,12 @@ const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
 
+// Trois modes :
+//   (défaut)   serveur local + broker MQTT local  → aucun réseau requis
+//   --reels    serveur local + vrais brokers publics → valide le transport réel
+//   --public   URL_APP en ligne + vrais brokers publics → valide tout
 const PUBLIC = process.argv.includes('--public');
+const BROKERS_REELS = PUBLIC || process.argv.includes('--reels');
 let BASE = PUBLIC ? (process.env.URL_APP || '').replace(/\/$/, '') : '';
 let BROKER_LOCAL = '';
 
@@ -88,7 +93,8 @@ async function nouvelEcran(navigateur, taille) {
 
 function url(chemin) {
   const sep = chemin.includes('?') ? '&' : '?';
-  return BASE + '/' + chemin + (PUBLIC ? '' : sep + 'bu=' + encodeURIComponent(BROKER_LOCAL));
+  // Sans « bu », l'application choisit elle-même parmi ses brokers publics.
+  return BASE + '/' + chemin + (BROKERS_REELS ? '' : sep + 'bu=' + encodeURIComponent(BROKER_LOCAL));
 }
 
 async function principal() {
@@ -118,7 +124,9 @@ async function principal() {
       });
       serveur.on('exit', (c) => rejeter(new Error('le bac à sable s’est arrêté (code ' + c + ')')));
     });
-    console.log(`Bac à sable prêt — ${BASE}  (broker ${BROKER_LOCAL})`);
+    console.log(BROKERS_REELS
+      ? `Bac à sable prêt — ${BASE}  (brokers MQTT publics réels)`
+      : `Bac à sable prêt — ${BASE}  (broker ${BROKER_LOCAL})`);
   } else {
     console.log(`Cible publique — ${BASE}  (brokers MQTT publics réels)`);
   }
@@ -151,8 +159,10 @@ async function principal() {
     const code = r.texte;
     verifier(/^[A-Z0-9]{5}$/.test(code), 'salle ouverte, code affiché', `${code} en ${r.ms} ms`);
 
-    const etatLien = await tv.page.$eval('.lien-etat', (e) => e.getAttribute('data-etat'));
-    verifier(etatLien === 'ok', 'écran central connecté au broker', `état = ${etatLien}`);
+    // Avec de vrais brokers, la connexion aboutit un peu après l'affichage du code.
+    const lien = await attendre(tv.page, '.lien-etat[data-etat="ok"]', () => true, 30000, '(connexion écran central)');
+    const suffixe = await tv.page.$eval('.lien-etat', (e) => e.textContent.trim());
+    ok('écran central connecté au broker', `${suffixe} — en ${lien.ms} ms`);
 
     const qr = await tv.page.$('.qr-panneau svg');
     verifier(!!qr, 'QR code généré et affiché');
