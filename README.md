@@ -10,6 +10,22 @@ Aucun compte, aucune application à installer.
 
 ---
 
+## Mettre l'application en ligne (une seule fois, ~30 secondes)
+
+L'hébergement est gratuit et permanent, mais GitHub demande une autorisation
+qu'un robot n'a pas le droit de donner à ma place. À faire une fois :
+
+1. Ouvrir **https://github.com/marahsimgil-afk/March-noir-des-gages-/settings/pages**
+2. Sous **Source**, choisir **Deploy from a branch**
+3. **Branch** : `claude/marche-noir-gages-app-dolp68` — dossier `/ (root)` — **Save**
+4. Attendre une minute, puis ouvrir :
+
+   **https://marahsimgil-afk.github.io/March-noir-des-gages-/**
+
+C'est cette adresse qui devient le lien de la soirée. Elle ne change plus.
+
+---
+
 ## Mode d'emploi du soir J
 
 1. Sur la tablette branchée à la TV, ouvre le lien, choisis **« Écran central »**,
@@ -34,6 +50,11 @@ l'accueil) : tout se joue sur un seul écran, sans réseau.
 | Hébergement | GitHub Pages (statique, gratuit, permanent) |
 | Temps réel | MQTT sur WebSocket sécurisé, brokers publics — aucun compte, aucune clé |
 | Dépendances | `mqtt.js` et `qrcode-generator`, servis depuis le site (aucun CDN externe) |
+
+Les CDN qui servent les dépôts publics (jsDelivr, statically, githack) ont été
+essayés et écartés, mesures à l'appui : ils renvoient le HTML en `text/plain`
+ou intercalent leur propre page d'avertissement, et l'application ne démarre
+jamais. GitHub Pages est la seule voie qui sert vraiment la page.
 
 **L'écran central est la seule autorité.** Il détient l'état de la partie, applique
 les mises et republie l'état complet en message *retained* : un téléphone qui

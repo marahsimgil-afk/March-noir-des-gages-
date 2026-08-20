@@ -56,7 +56,7 @@ jobs:
             if ! echo "$TYPE" | grep -qi 'text/html'; then echo "    ✗ servi hors text/html (le navigateur ne l'exécutera pas)"; continue; fi
             # Certains proxys renvoient bien du text/html… mais leur propre page
             # d'avertissement. On exige donc des marqueurs de NOTRE page.
-            if ! grep -q 'id="app"' /tmp/page.html || ! grep -q 'app.js' /tmp/page.html; then
+            if ! grep -q 'marqueur-marche-noir-des-gages' /tmp/page.html; then
               echo "    ✗ ce n'est pas notre page (page intermédiaire du service)"
               head -c 300 /tmp/page.html | tr '\n' ' '
               echo
