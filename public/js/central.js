@@ -428,8 +428,11 @@
       }
     });
 
-    // Premier affichage du QR : c'est l'action suivante attendue par l'organisatrice.
-    setTimeout(afficherQR, 400);
+    // Le QR ne s'ouvre de lui-même qu'à la création de la salle : c'est l'action
+    // suivante attendue. Sur une reprise (onglet rechargé en pleine soirée), il
+    // viendrait se mettre en travers de l'écran alors que tout le monde a déjà
+    // rejoint ; le bouton reste là pour les retardataires.
+    if (opts.nouvelle) setTimeout(afficherQR, 400);
   }
 
   root.MNGCentral = {

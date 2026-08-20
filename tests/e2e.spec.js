@@ -201,7 +201,11 @@ test('clôture manuelle : adjugé, validation, ardoise mise à jour partout', as
   await lancerLot(tv.page, 'Porter le chapeau ridicule');
   await taper(lea.page, 2);
   await taper(tom.page, 7);
+  // On attend que le total de Tom soit bien arrivé avant de clore : une mise
+  // encore en vol au moment du clic serait refusée — à juste titre, mais le test
+  // mesurerait alors sa propre précipitation plutôt que le comportement du jeu.
   await expect(tv.page.locator('#central-meneur')).toContainText('Tom', { timeout: PATIENCE });
+  await expect(tv.page.locator('#central-meneur')).toContainText('7', { timeout: PATIENCE });
 
   await tv.page.click('#btn-clore');
   await expect(tv.page.locator('#vue-adjuge')).toBeVisible();

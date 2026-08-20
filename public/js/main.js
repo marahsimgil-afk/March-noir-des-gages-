@@ -83,16 +83,17 @@
     }
     var st = root.MNG.createState(root.MNG.makeCode(), noms, Date.now());
     st.duration = etatInstall.duree;
-    demarrerCentral(st);
+    demarrerCentral(st, true);
   }
 
-  function demarrerCentral(st) {
+  function demarrerCentral(st, nouvelle) {
     // Marqué avant de toucher au hash : sinon l'événement `hashchange` relance le
     // routeur, qui ne trouve pas encore de sauvegarde et renvoie vers l'accueil.
     demarre = true;
     location.hash = '#/tv';
     root.MNGCentral.demarrer({
       state: st,
+      nouvelle: !!nouvelle,
       quit: function () {
         demarre = false;
         location.hash = '#/';
