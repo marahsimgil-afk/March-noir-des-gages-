@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<title>Marché Noir des Gages — mode secours</title>
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2308080a'/><text y='72' x='50' text-anchor='middle' font-size='64' fill='%23c9a227'>%E2%9A%92</text></svg>">
+</head>
+<body>
+<div class="wrap" style="max-width:900px">
+
+  <div class="enseigne" style="padding:3vh 0 1vh">
+    <div class="sur">Mode secours — un seul appareil</div>
+    <h1 style="font-size:clamp(1.6rem,5vw,2.8rem)">Le Marché Noir<br>des Gages</h1>
+  </div>
+
+  <div class="alerte douce">
+    Version de secours : elle ne demande <b>aucune connexion Internet</b>. Un seul téléphone
+    circule, ou l’organisatrice enregistre les mises annoncées à voix haute. À utiliser si les
+    téléphones n’arrivent pas à rejoindre la salle.
+  </div>
+
+  <!-- Installation -->
+  <section id="s-install">
+    <div class="carton or">
+      <div class="etiquette">Les prénoms</div>
+      <div class="noms-grille" id="grille-noms"></div>
+      <div class="rangee mt">
+        <button class="fantome" id="btn-ajouter">+ une place</button>
+        <button class="primaire" id="btn-demarrer" style="flex:1">Commencer</button>
+      </div>
+      <div id="erreur" class="mt"></div>
+    </div>
+  </section>
+
+  <!-- Jeu -->
+  <section id="s-jeu" style="display:none">
+    <div class="carton or scene" style="min-height:auto;padding:22px">
+      <!-- repos -->
+      <div id="v-repos">
+        <div class="etiquette centrer">Lot à mettre en vente</div>
+        <textarea id="champ-gage" rows="2" placeholder="Tapez un gage, ou tirez-en un au sort…"
+                  style="font-family:var(--serif);font-size:1.1rem;text-align:center"></textarea>
+        <div class="rangee mt" style="justify-content:center">
+          <button class="fantome" id="btn-tirer">Tirer au sort</button>
+          <select id="champ-duree" style="width:auto"></select>
+          <button class="primaire" id="btn-ouvrir">Ouvrir les enchères</button>
+        </div>
+      </div>
+
+      <!-- enchère -->
+      <div id="v-enchere" style="display:none">
+        <div class="lot-titre" id="lot-titre"></div>
+        <div class="minuteur mono mt" id="minuteur">00</div>
+        <div class="jauge" id="jauge"><i style="width:100%"></i></div>
+        <div class="meneur-bloc mt" id="meneur"></div>
+        <div class="etiquette centrer mt">Tapez pour enchérir</div>
+        <div class="noms-liste" id="boutons-mise" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div>
+        <div class="rangee mt" style="justify-content:center">
+          <button class="fantome" id="btn-clore">Clore maintenant</button>
+          <button class="danger" id="btn-annuler">Annuler le lot</button>
+        </div>
+      </div>
+
+      <!-- adjugé -->
+      <div id="v-adjuge" style="display:none">
+        <div class="centrer"><div class="tampon">Adjugé</div></div>
+        <div class="lot-titre mt" id="adj-lot"></div>
+        <div class="meneur-bloc mt" id="adj-qui"></div>
+        <div class="rangee mt" style="justify-content:center">
+          <button class="primaire" id="btn-encaisser">Valider — porter à l’ardoise</button>
+          <button class="danger" id="btn-annuler2">Annuler la vente</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="carton mt">
+      <div class="etiquette">Les ardoises — gorgées dues</div>
+      <div id="ardoises"></div>
+    </div>
+
+    <div class="carton mt">
+      <div class="etiquette">Lots vendus</div>
+      <div id="histo"><p class="discret">Aucune vente pour l’instant.</p></div>
+    </div>
+
+    <div class="rangee mt"><button class="danger" id="btn-fin">Terminer la soirée</button></div>
+  </section>
+
+  <p class="pied-sobre">Buvez de l’eau entre deux lots. L’ardoise est un jeu, pas une dette.</p>
+</div>
+
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  var UI = window.MNGUI, $ = UI.$, MNG = window.MNG;
+  var CLE = 'mng.solo.v1';
+  var state = null, timer = null, places = 9;
+
+  function sauver() {
+    try { localStorage.setItem(CLE, JSON.stringify(state)); } catch (e) {}
+  }
+  function charger() {
+    try {
+      var s = JSON.parse(localStorage.getItem(CLE) || 'null');
+      return s && s.players && s.v === MNG.PROTOCOL ? s : null;
+    } catch (e) { return null; }
+  }
+
+  /* ---------------------------------------------------------- installation -- */
+
+  function rendreGrille() {
+    var h = '';
+    for (var i = 0; i < places; i++) {
+      h += '<input type="text" class="champ-nom" maxlength="14" placeholder="Prénom ' + (i + 1) + '" autocomplete="off">';
+    }
+    $('grille-noms').innerHTML = h;
+  }
+
+  function demarrer() {
+    var champs = $('grille-noms').querySelectorAll('.champ-nom');
+    var noms = [];
+    for (var i = 0; i < champs.length; i++) {
+      var v = champs[i].value.trim();
+      if (v) noms.push(v);
+    }
+    if (noms.length < 2) {
+      UI.alerte($('erreur'), 'Il faut au moins deux enchérisseurs.');
+      return;
+    }
+    state = MNG.createState(MNG.makeCode(), noms, Date.now());
+    sauver();
+    entrerJeu();
+  }
+
+  function entrerJeu() {
+    UI.show($('s-install'), false);
+    UI.show($('s-jeu'), true);
+    var sel = $('champ-duree');
+    sel.innerHTML = MNG.DURATIONS.map(function (d) {
+      return '<option value="' + d + '"' + (d === state.duration ? ' selected' : '') + '>' + d + ' s</option>';
+    }).join('');
+    rendre();
+    if (timer) clearInterval(timer);
+    timer = setInterval(tick, 150);
+  }
+
+  /* ------------------------------------------------------------------ rendu -- */
+
+  function rendreArdoises() {
+    var cl = MNG.ranking(state), h = '';
+    for (var i = 0; i < cl.length; i++) {
+      h += '<div class="ardoise-ligne' + (i === 0 && cl[i].tab > 0 ? ' tete' : '') + '">' +
+           '<span class="ardoise-rang mono">' + (i + 1) + '</span>' +
+           '<span class="ardoise-nom">' + UI.esc(cl[i].name) + '</span>' +
+           '<span class="ardoise-total mono">' + cl[i].tab + '</span></div>';
+    }
+    $('ardoises').innerHTML = h;
+  }
+
+  function rendreHisto() {
+    if (!state.history.length) {
+      $('histo').innerHTML = '<p class="discret">Aucune vente pour l’instant.</p>';
+      return;
+    }
+    $('histo').innerHTML = state.history.map(function (x) {
+      return '<div class="histo-ligne">' +
+        (x.winnerName
+          ? '<span class="qui">' + UI.esc(x.winnerName) + '</span> — <span class="combien">' + x.amount + ' gorgées</span>'
+          : '<span class="discret">Invendu</span>') +
+        '<span class="qoi">' + UI.esc(x.title) + '</span></div>';
+    }).join('');
+  }
+
+  function rendreBoutons() {
+    $('boutons-mise').innerHTML = state.players.map(function (p) {
+      return '<button class="nom-bouton" data-p="' + p.id + '">' + UI.esc(p.name) +
+        '<br><b class="mono" style="color:var(--or-clair)">' + (state.bids[p.id] || 0) + '</b></button>';
+    }).join('');
+  }
+
+  function rendreMeneur() {
+    var m = MNG.leader(state);
+    $('meneur').innerHTML = m
+      ? '<div class="meneur-nom">' + UI.esc(m.name) + '</div><div class="meneur-montant">mène à <b>' + m.amount + '</b> gorgées</div>'
+      : '<div class="meneur-vide">Personne n’a encore osé.</div>';
+  }
+
+  function rendreMinuteur() {
+    if (state.phase !== 'open') return;
+    var r = MNG.remainingMs(state, Date.now());
+    var urgent = r <= 5000;
+    var s = Math.ceil(r / 1000);
+    $('minuteur').textContent = s < 10 ? '0' + s : String(s);
+    $('minuteur').classList.toggle('urgence', urgent);
+    $('jauge').classList.toggle('urgence', urgent);
+    $('jauge').firstElementChild.style.width =
+      Math.max(0, Math.min(100, (r / (state.duration * 1000)) * 100)) + '%';
+  }
+
+  function rendre() {
+    UI.show($('v-repos'), state.phase === 'lobby');
+    UI.show($('v-enchere'), state.phase === 'open');
+    UI.show($('v-adjuge'), state.phase === 'closed');
+    if (state.phase === 'open') {
+      $('lot-titre').textContent = state.lot.title;
+      rendreMinuteur();
+      rendreMeneur();
+      rendreBoutons();
+    } else if (state.phase === 'closed') {
+      var r = state.result;
+      $('adj-lot').textContent = r.title;
+      $('adj-qui').innerHTML = r.winnerId
+        ? '<div class="meneur-nom">' + UI.esc(r.winnerName) + '</div><div class="meneur-montant">emporte le lot pour <b>' + r.amount + '</b> gorgées</div>'
+        : '<div class="meneur-vide">Aucune offre. Le lot reste invendu.</div>';
+      $('btn-encaisser').textContent = r.winnerId
+        ? 'Valider — porter ' + r.amount + ' gorgées à l’ardoise'
+        : 'Passer au lot suivant';
+    }
+    rendreArdoises();
+    rendreHisto();
+  }
+
+  function tick() {
+    if (state.phase !== 'open') return;
+    rendreMinuteur();
+    if (Date.now() > state.endsAt + MNG.GRACE_MS) {
+      MNG.closeLot(state, state.endsAt);
+      sauver();
+      rendre();
+    }
+  }
+
+  /* ---------------------------------------------------------------- câblage -- */
+
+  $('btn-ajouter').addEventListener('click', function () { places++; rendreGrille(); });
+  $('btn-demarrer').addEventListener('click', demarrer);
+
+  $('btn-tirer').addEventListener('click', function () {
+    $('champ-gage').value = MNG.DEFAULT_LOTS[Math.floor(Math.random() * MNG.DEFAULT_LOTS.length)];
+  });
+
+  $('btn-ouvrir').addEventListener('click', function () {
+    var t = $('champ-gage').value.trim();
+    if (!t) { alert('Choisissez un gage.'); return; }
+    MNG.openLot(state, t, Number($('champ-duree').value), Date.now());
+    sauver(); rendre();
+  });
+
+  $('boutons-mise').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('[data-p]') : null;
+    if (!b) return;
+    MNG.applyCommand(state, { id: MNG.makeId(), t: 'bid', p: b.getAttribute('data-p'), n: 1 }, Date.now());
+    sauver();
+    rendreBoutons();
+    rendreMeneur();
+  });
+
+  $('btn-clore').addEventListener('click', function () {
+    MNG.closeLot(state, Date.now()); sauver(); rendre();
+  });
+  function annuler() { MNG.cancelLot(state); sauver(); rendre(); }
+  $('btn-annuler').addEventListener('click', annuler);
+  $('btn-annuler2').addEventListener('click', annuler);
+
+  $('btn-encaisser').addEventListener('click', function () {
+    MNG.settle(state, Date.now());
+    $('champ-gage').value = '';
+    sauver(); rendre();
+  });
+
+  $('btn-fin').addEventListener('click', function () {
+    if (!confirm('Terminer la soirée ? Les ardoises seront effacées.')) return;
+    try { localStorage.removeItem(CLE); } catch (e) {}
+    location.reload();
+  });
+
+  /* ------------------------------------------------------------- démarrage -- */
+
+  var sauve = charger();
+  if (sauve) {
+    state = sauve;
+    entrerJeu();
+  } else {
+    rendreGrille();
+  }
+})();
+</script>
+</body>
+</html>
