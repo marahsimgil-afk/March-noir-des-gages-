@@ -1,0 +1,101 @@
+name: Mise en ligne et vérification réelle
+
+# Le bac à sable de développement n'a d'accès réseau que vers GitHub : il ne peut
+# joindre ni l'URL publique ni les brokers MQTT. C'est donc ce workflow, exécuté
+# sur un runner GitHub à l'accès Internet normal, qui met en ligne puis vérifie
+# réellement la synchronisation multi-appareils.
+
+on:
+  push:
+    branches: [claude/marche-noir-gages-app-ymno7k, main]
+  workflow_dispatch:
+  schedule:
+    # Contrôle hebdomadaire : si un broker public tombe d'ici la soirée, l'échec
+    # du job le signalera avant le jour J plutôt que le soir même.
+    - cron: '17 9 * * 1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mise-en-ligne
+  cancel-in-progress: false
+
+jobs:
+  en-ligne:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Publication du site sur la branche gh-pages. C'est aussi la source que
+      # GitHub Pages utilisera une fois activé sur le dépôt.
+      - name: Publier la branche gh-pages
+        run: |
+          set -eux
+          cp -r public /tmp/site
+          touch /tmp/site/.nojekyll
+          cd /tmp/site
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Site ${{ github.sha }}"
+          git push -q --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            HEAD:gh-pages
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci || npm install
+
+      - name: Tests unitaires des règles
+        run: node tests/unit-game.js
+
+      - name: État des brokers MQTT publics
+        run: node tests/check-brokers.js
+
+      # Quelle adresse publique fonctionne réellement, sans réglage manuel ?
+      - name: Choisir l'adresse publique
+        id: adresse
+        run: |
+          set -o pipefail
+          node tests/sonde-urls.js \
+            "https://marahsimgil-afk.github.io/March-noir-des-gages-" \
+            "https://cdn.jsdelivr.net/gh/marahsimgil-afk/March-noir-des-gages-@gh-pages" \
+            "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://cdn.statically.io/gh/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            | tee /tmp/sonde.txt
+          echo "url=$(grep '^RETENUE=' /tmp/sonde.txt | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+
+      - name: Installer Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Suite multi-appareils contre l'infra publique
+        env:
+          MNG_BASE: ${{ steps.adresse.outputs.url }}
+          MNG_WS: ''
+        run: npx playwright test --reporter=list
+
+      - name: Récapitulatif
+        if: always()
+        run: |
+          {
+            echo "## Adresse publique"
+            echo ""
+            echo "\`${{ steps.adresse.outputs.url }}\`"
+            echo ""
+            echo "## Brokers"
+            echo ""
+            echo '```'
+            cat /tmp/sonde.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: traces-playwright
+          path: test-results/
+          retention-days: 7
