@@ -698,16 +698,33 @@ function ligneArdoise(rang, nom, valeur, opts) {
    --------------------------------------------------------- */
 
 function ecranAccueil() {
+  // Si la tablette a rechargé la page en pleine soirée, on propose de
+  // reprendre la salle en un tap plutôt que de tout ressaisir.
+  var repris = lire('mng.hote');
+  var recent = repris && repris.ts && (Date.now() - repris.ts < 12 * 3600 * 1000);
+  var reprise = null;
+  if (recent) {
+    var zoneEtat = h('div', { class: 'tres-discret' });
+    reprise = h('div', { class: 'pile g8', style: 'width:min(360px,100%)' }, [
+      h('button', {
+        class: 'btn or large',
+        onclick: function () { Son.reveiller(); reprendreSalle(repris, zoneEtat); }
+      }, 'Reprendre la salle ' + repris.code),
+      zoneEtat
+    ]);
+  }
+
   var root = h('div', { class: 'vue' }, [
     h('div', { class: 'centre' }, [
       enseigne(),
       h('p', { class: 'discret', style: 'max-width:34ch', text:
         "Un gage est mis aux enchères. On mise en gorgées. Le plus offrant l'emporte… et boit ce qu'il a misé." }),
+      reprise,
       h('div', { class: 'pile g12', style: 'width:min(360px,100%)' }, [
         h('button', {
-          class: 'btn or large',
+          class: (recent ? 'btn fantome large' : 'btn or large'),
           onclick: function () { Son.reveiller(); App.allerHoteConfig(); }
-        }, 'Écran central'),
+        }, recent ? 'Nouvelle partie (écran central)' : 'Écran central'),
         h('button', {
           class: 'btn fantome large',
           onclick: function () { App.allerRejoindre(); }
