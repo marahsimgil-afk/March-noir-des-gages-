@@ -1,0 +1,30 @@
+{
+  "name": "marche-noir-des-gages",
+  "version": "1.0.0",
+  "description": "Jeu d'enchères clandestines payées en gorgées — écran central + téléphones, synchronisé en temps réel.",
+  "scripts": {
+    "serve": "node test/serve.mjs",
+    "test": "node test/e2e.mjs",
+    "captures": "node test/captures.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marahsimgil-afk/March-noir-des-gages-.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/marahsimgil-afk/March-noir-des-gages-/issues"
+  },
+  "homepage": "https://github.com/marahsimgil-afk/March-noir-des-gages-#readme",
+  "dependencies": {
+    "mqtt": "^5.15.2",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "aedes": "^1.1.1",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1",
+    "ws": "^8.21.3"
+  },
+  "private": true
+}

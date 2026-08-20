@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Le Marché Noir des Gages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a0a0c'/><text y='24' x='6' font-size='22' fill='%23c9a227'>%E2%9A%96</text></svg>">
+</head>
+<body>
+
+<!-- ============ ACCUEIL ============ -->
+<section id="screen-home" class="screen">
+  <div class="home-wrap">
+    <div class="crest">&#9878;</div>
+    <h1 class="display">Le Marché Noir<br><span class="gold">des Gages</span></h1>
+    <p class="tagline">Vente aux enchères clandestine &middot; paiement en gorgées</p>
+    <div class="home-actions">
+      <button class="btn btn-gold btn-xl" id="btn-role-tv">Écran central<small>La TV / la tablette de l'organisatrice</small></button>
+      <button class="btn btn-ghost btn-xl" id="btn-role-player">Rejoindre une vente<small>Le téléphone d'un joueur</small></button>
+    </div>
+    <p class="micro"><a href="#diag" class="lnk">Tester ma connexion</a></p>
+  </div>
+</section>
+
+<!-- ============ REJOINDRE : CODE ============ -->
+<section id="screen-code" class="screen">
+  <div class="home-wrap narrow">
+    <h2 class="display sm">Code de la vente</h2>
+    <p class="tagline">Il est affiché sur l'écran central.</p>
+    <input id="code-input" class="code-input" inputmode="latin" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="5" placeholder="XXXXX">
+    <button class="btn btn-gold btn-xl" id="btn-code-go">Entrer</button>
+    <p class="err" id="code-err"></p>
+    <p class="micro"><a href="#" class="lnk">Retour</a></p>
+  </div>
+</section>
+
+<!-- ============ TV : CONFIGURATION ============ -->
+<section id="screen-setup" class="screen">
+  <div class="setup-wrap">
+    <h2 class="display sm">Ouvrir la salle des ventes</h2>
+    <p class="tagline">Entre les prénoms des participants (toi comprise).</p>
+    <div id="names-list" class="names-list"></div>
+    <div class="setup-row">
+      <button class="btn btn-ghost" id="btn-add-name">+ Ajouter un participant</button>
+      <span class="count" id="names-count"></span>
+    </div>
+    <p class="err" id="setup-err"></p>
+    <button class="btn btn-gold btn-xl" id="btn-open-room">Ouvrir la vente</button>
+    <p class="micro" id="resume-line" hidden></p>
+    <p class="micro"><a href="#" class="lnk">Retour</a></p>
+  </div>
+</section>
+
+<!-- ============ TV : ÉCRAN CENTRAL ============ -->
+<section id="screen-tv" class="screen">
+  <header class="topbar">
+    <div class="brand"><span class="crest sm">&#9878;</span><span class="display xs">Le Marché Noir des Gages</span></div>
+    <div class="topbar-right">
+      <button class="pill pill-code" id="tv-code-btn" title="Afficher le QR code">VENTE <b id="tv-code"></b> &middot; QR</button>
+      <span class="pill status" id="tv-status">CONNEXION…</span>
+    </div>
+  </header>
+
+  <main class="tv-grid">
+    <!-- Colonne enchère -->
+    <div class="panel panel-lot">
+      <!-- Etat: pas de lot -->
+      <div id="tv-idle">
+        <h3 class="label">Mettre un lot en vente</h3>
+        <div class="lot-picker">
+          <select id="lot-select" class="select"></select>
+          <textarea id="lot-custom" class="textarea" rows="2" placeholder="…ou tape ton propre gage ici"></textarea>
+        </div>
+        <div class="durations" id="duration-group">
+          <span class="label inline">Minuteur</span>
+          <button class="chip" data-dur="20">20 s</button>
+          <button class="chip is-on" data-dur="30">30 s</button>
+          <button class="chip" data-dur="45">45 s</button>
+          <button class="chip" data-dur="60">60 s</button>
+        </div>
+        <button class="btn btn-red btn-xl" id="btn-open-lot">Ouvrir l'enchère</button>
+        <div id="tv-last-result" class="last-result" hidden></div>
+      </div>
+
+      <!-- Etat: enchère en cours / close -->
+      <div id="tv-live" hidden>
+        <div class="lot-head">
+          <span class="label">Lot n<sup>o</sup> <b id="lot-num">1</b> &middot; <span id="lot-phase">en vente</span></span>
+          <p class="lot-title" id="lot-title"></p>
+        </div>
+        <div class="auction-body">
+          <div class="timer-wrap">
+            <svg viewBox="0 0 120 120" class="timer-ring" aria-hidden="true">
+              <circle cx="60" cy="60" r="52" class="ring-bg"></circle>
+              <circle cx="60" cy="60" r="52" class="ring-fg" id="ring-fg"></circle>
+            </svg>
+            <div class="timer-num mono" id="timer-num">30</div>
+            <div class="timer-cap" id="timer-cap">secondes</div>
+          </div>
+          <div class="leader-box">
+            <div class="label">Meilleure offre</div>
+            <div class="bid-amount mono" id="best-amount">0</div>
+            <div class="bid-unit">gorgées</div>
+            <div class="leader-name" id="leader-name">— aucune offre —</div>
+          </div>
+        </div>
+        <div class="bidders" id="bidders"></div>
+        <div class="tv-live-actions">
+          <button class="btn btn-ghost" id="btn-close-lot">Clôturer maintenant</button>
+          <button class="btn btn-gold btn-xl" id="btn-adjuge" hidden>Adjugé ! Valider</button>
+          <button class="btn btn-ghost" id="btn-cancel-lot">Annuler le lot</button>
+        </div>
+        <div class="stamp" id="stamp" hidden>Adjugé</div>
+      </div>
+    </div>
+
+    <!-- Colonne ardoises -->
+    <aside class="panel panel-side">
+      <h3 class="label">Les ardoises</h3>
+      <ol class="board" id="board"></ol>
+      <div class="manual">
+        <details>
+          <summary class="label">Ajout manuel (téléphone en rade)</summary>
+          <div class="manual-row">
+            <select id="manual-player" class="select sm"></select>
+            <input id="manual-amount" class="num-input mono" type="number" min="1" value="1" inputmode="numeric">
+            <button class="btn btn-ghost sm" id="btn-manual-bid">Miser</button>
+          </div>
+          <p class="micro">Ajoute une mise au nom d'un joueur sur le lot en cours.</p>
+        </details>
+      </div>
+      <h3 class="label mt">Lots vendus</h3>
+      <ul class="history" id="history"><li class="empty">Rien n'a encore été adjugé.</li></ul>
+      <p class="footnote">Une gorgée = une gorgée. L'eau compte aussi.</p>
+    </aside>
+  </main>
+</section>
+
+<!-- ============ JOUEUR : QUI ES-TU ============ -->
+<section id="screen-who" class="screen">
+  <div class="home-wrap narrow">
+    <h2 class="display sm">Qui es-tu ?</h2>
+    <p class="tagline">Vente <b class="gold mono" id="who-code"></b></p>
+    <div id="who-list" class="who-list"></div>
+    <p class="err" id="who-err"></p>
+    <p class="micro" id="who-wait">En attente de l'écran central…</p>
+  </div>
+</section>
+
+<!-- ============ JOUEUR : ENCHÈRE ============ -->
+<section id="screen-player" class="screen">
+  <header class="topbar">
+    <div class="brand"><span class="me-name" id="me-name"></span></div>
+    <div class="topbar-right">
+      <span class="pill">Ardoise <b class="mono" id="me-tab">0</b></span>
+      <span class="pill status" id="pl-status">CONNEXION…</span>
+    </div>
+  </header>
+  <div class="banner" id="pl-banner" hidden></div>
+
+  <main class="player-main">
+    <div id="pl-waiting" class="pl-waiting">
+      <div class="crest lg">&#9878;</div>
+      <p class="wait-title">Pas de lot en vente</p>
+      <p class="tagline">Regarde l'écran central. Ça va arriver.</p>
+      <div id="pl-last" class="last-result" hidden></div>
+    </div>
+
+    <div id="pl-live" hidden>
+      <p class="label center">Lot n<sup>o</sup> <b id="pl-lot-num"></b></p>
+      <p class="pl-lot-title" id="pl-lot-title"></p>
+      <div class="pl-meta">
+        <div class="pl-meta-cell">
+          <div class="label">Temps</div>
+          <div class="mono big" id="pl-timer">30</div>
+        </div>
+        <div class="pl-meta-cell">
+          <div class="label">Meilleure offre</div>
+          <div class="mono big" id="pl-best">0</div>
+          <div class="pl-leader" id="pl-leader">—</div>
+        </div>
+        <div class="pl-meta-cell">
+          <div class="label">Ma mise</div>
+          <div class="mono big gold" id="pl-mine">0</div>
+        </div>
+      </div>
+      <button class="bid-btn" id="btn-bid1"><span class="bid-plus">+1</span><span class="bid-lbl">enchérir</span></button>
+      <button class="btn btn-ghost btn-xl" id="btn-bid5">+5 d'un coup</button>
+      <p class="micro center" id="pl-hint">Chaque gorgée misée, tu la bois si tu remportes le lot.</p>
+      <div class="pl-result" id="pl-result" hidden></div>
+    </div>
+  </main>
+</section>
+
+<!-- ============ DIAGNOSTIC ============ -->
+<section id="screen-diag" class="screen">
+  <div class="home-wrap narrow">
+    <h2 class="display sm">Diagnostic</h2>
+    <p class="tagline">Vérifie que ce téléphone peut se connecter au relais temps réel.</p>
+    <button class="btn btn-gold btn-xl" id="btn-diag-run">Lancer le test</button>
+    <ul class="diag-list" id="diag-list"></ul>
+    <p class="micro"><a href="#" class="lnk">Retour</a></p>
+  </div>
+</section>
+
+<!-- ============ MODALE QR ============ -->
+<div class="modal" id="modal-qr" hidden>
+  <div class="modal-card">
+    <h3 class="display sm">Scanne pour enchérir</h3>
+    <div class="qr-holder"><canvas id="qr-canvas"></canvas></div>
+    <p class="qr-url mono" id="qr-url"></p>
+    <p class="qr-code">Code de la vente : <b class="mono gold" id="qr-code"></b></p>
+    <button class="btn btn-gold" id="btn-qr-close">Fermer</button>
+  </div>
+</div>
+
+<script src="vendor/mqtt.min.js"></script>
+<script src="vendor/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
