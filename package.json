@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Jeu d'enchères clandestines payées en gorgées — écran central + téléphones, synchronisé en temps réel.",
   "scripts": {
+    "build": "node tools/bundle.mjs",
     "serve": "node test/serve.mjs",
     "test": "node test/e2e.mjs",
     "captures": "node test/captures.mjs"

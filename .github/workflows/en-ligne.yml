@@ -11,98 +11,10 @@ permissions:
   id-token: write
 
 jobs:
-  # 1. GitHub Pages, si le dépôt nous y autorise (sinon on le dit, sans échouer).
-  pages:
-    name: GitHub Pages (au mieux)
+  en_ligne:
+    name: Publier puis vérifier sur plusieurs appareils
     runs-on: ubuntu-latest
-    outputs:
-      url: ${{ steps.etat.outputs.url }}
-    steps:
-      - id: etat
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          BRANCHE: ${{ github.ref_name }}
-        run: |
-          corps="{\"source\":{\"branch\":\"$BRANCHE\",\"path\":\"/docs\"}}"
-          if ! gh api "repos/$REPO/pages" > /tmp/pages.json 2>/dev/null; then
-            echo "Pages n'est pas activé sur ce dépôt — tentative d'activation"
-            if ! echo "$corps" | gh api -X POST "repos/$REPO/pages" --input - > /tmp/pages.json; then
-              echo "::warning::Le jeton d'Actions n'a pas le droit d'activer Pages (il faut le droit Administration). À activer une fois à la main dans Settings → Pages."
-              exit 0
-            fi
-          fi
-          echo "$corps" | gh api -X PUT "repos/$REPO/pages" --input - || true
-          gh api -X POST "repos/$REPO/pages/builds" || true
-          for i in $(seq 1 30); do
-            j=$(gh api "repos/$REPO/pages" 2>/dev/null || echo '{}')
-            s=$(echo "$j" | jq -r '.status // "absent"'); u=$(echo "$j" | jq -r '.html_url // ""')
-            echo "attente $i — statut : $s"
-            if [ "$s" = "built" ] && [ -n "$u" ]; then
-              echo "url=$u" >> "$GITHUB_OUTPUT"
-              echo "### GitHub Pages : $u" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            sleep 10
-          done
-
-  # 2. URL publique servie par un CDN qui relaie GitHub (aucune activation requise).
-  url_publique:
-    name: URL publique
-    runs-on: ubuntu-latest
-    outputs:
-      base: ${{ steps.choix.outputs.base }}
-    steps:
-      - id: choix
-        env:
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          candidats="https://rawcdn.githack.com/$REPO/$SHA/docs/index.html
-          https://cdn.statically.io/gh/$REPO/$SHA/docs/index.html
-          https://raw.githack.com/$REPO/$SHA/docs/index.html"
-          for essai in 1 2 3; do
-            for u in $candidats; do
-              u=$(echo "$u" | xargs)
-              code=$(curl -sS -L -o /tmp/p.html -w '%{http_code}' "$u" || echo 000)
-              type=$(curl -sS -L -o /dev/null -w '%{content_type}' "$u" || echo '')
-              if [ "$code" = "200" ] && echo "$type" | grep -qi 'text/html' && grep -q 'Marché Noir' /tmp/p.html; then
-                # les fichiers liés doivent suivre
-                base=$(dirname "$u")
-                for f in style.css app.js vendor/mqtt.min.js vendor/qrcode.min.js; do
-                  lu=$(curl -sS -L -o /tmp/f.bin -w '%{http_code} %{content_type} %{size_download}' "$base/$f")
-                  echo "  $f → $lu"
-                  c=$(echo "$lu" | cut -d' ' -f1)
-                  t=$(echo "$lu" | cut -d' ' -f2)
-                  [ "$c" = "200" ] || { code=000; break; }
-                  case "$f" in
-                    *.js)  echo "$t" | grep -qiE 'javascript|ecmascript' || { echo "    type MIME inutilisable pour un script"; code=000; break; } ;;
-                    *.css) echo "$t" | grep -qi 'text/css' || { echo "    type MIME inutilisable pour une feuille de style"; code=000; break; } ;;
-                  esac
-                done
-                echo "  en-têtes de index.html :"; curl -sS -L -D - -o /dev/null "$u" | sed 's/^/    /' | head -20
-              else
-                code=000
-              fi
-              if [ "$code" = "200" ]; then
-                echo "RETENU : $u"
-                echo "base=$u" >> "$GITHUB_OUTPUT"
-                { echo "### L'application est en ligne"; echo ""; echo "**$u**"; } >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-              fi
-              echo "écarté : $u (http $code, type $type)"
-            done
-            sleep 20
-          done
-          echo "::error::Aucune URL publique n'a répondu correctement"
-          exit 1
-
-  # 3. Le vrai test : deux appareils et plus, sur l'URL publique et les brokers publics.
-  verification:
-    name: Vérification multi-appareils en conditions réelles
-    needs: url_publique
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -110,8 +22,54 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Test de bout en bout sur l'application en ligne
+
+      - name: Le fichier autonome est à jour
+        run: |
+          npm run build
+          git diff --exit-code docs/solo.html \
+            || { echo "::error::docs/solo.html ne correspond plus aux sources — lancer 'npm run build'"; exit 1; }
+
+      - name: GitHub Pages, si le dépôt l'autorise
+        id: pages
         env:
-          BASE: ${{ needs.url_publique.outputs.base }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCHE: ${{ github.ref_name }}
+        run: |
+          corps="{\"source\":{\"branch\":\"$BRANCHE\",\"path\":\"/docs\"}}"
+          if ! gh api "repos/$REPO/pages" >/dev/null 2>&1; then
+            if ! echo "$corps" | gh api -X POST "repos/$REPO/pages" --input - >/dev/null 2>&1; then
+              echo "::warning::Pages n'est pas activé et le jeton d'Actions n'a pas le droit de l'activer (droit Administration requis). À faire une fois dans Settings → Pages → Source : cette branche, dossier /docs."
+              exit 0
+            fi
+          fi
+          echo "$corps" | gh api -X PUT "repos/$REPO/pages" --input - >/dev/null 2>&1 || true
+          gh api -X POST "repos/$REPO/pages/builds" >/dev/null 2>&1 || true
+          for i in $(seq 1 30); do
+            u=$(gh api "repos/$REPO/pages" --jq 'select(.status=="built") | .html_url' 2>/dev/null || echo '')
+            [ -n "$u" ] && { echo "url=$u" >> "$GITHUB_OUTPUT"; echo "Pages : $u"; exit 0; }
+            sleep 10
+          done
+          echo "Pages ne s'est pas construit à temps"
+
+      - name: Choisir une URL publique qui démarre vraiment
+        id: url
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          PAGES: ${{ steps.pages.outputs.url }}
+        run: |
+          base=$(node tools/choisir-url.mjs \
+            ${PAGES:+"$PAGES"} \
+            ${PAGES:+"${PAGES}solo.html"} \
+            "https://cdn.statically.io/gh/$REPO/$SHA/docs/solo.html" \
+            "https://cdn.statically.io/gh/$REPO/$SHA/docs/index.html" \
+            "https://rawcdn.githack.com/$REPO/$SHA/docs/solo.html")
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          { echo "## L'application est en ligne"; echo ""; echo "**$base**"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test multi-appareils sur l'application en ligne
+        env:
+          BASE: ${{ steps.url.outputs.base }}
           BROKER: ""
         run: node test/e2e.mjs
