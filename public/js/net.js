@@ -238,6 +238,17 @@
       isConnected: function () {
         return !!(client && client.connected);
       },
+      /**
+       * Force une reconnexion immédiate. Utile quand la socket est toujours
+       * ouverte mais que plus rien n'arrive : le lien est mort sans l'avoir dit,
+       * et seul un appelant qui attend des données peut s'en rendre compte.
+       */
+      reveiller: function () {
+        if (closed) return;
+        essaisMemeBroker = 0;
+        teardown();
+        connect();
+      },
       brokerIndex: function () {
         return idx % BROKERS.length;
       },

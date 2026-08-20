@@ -23,6 +23,8 @@
   var moi = null; // identifiant du joueur
   var offset = 0; // décalage d'horloge avec l'écran central
   var dernierEtatA = 0;
+  var dernierReveil = 0;
+  var statutLien = { state: 'connecting', brokerLabel: '', detail: '' };
   var tickTimer = null;
   var cableFait = false;
 
@@ -164,9 +166,22 @@
   function rendreAlerteLien() {
     var el = $('joueur-alerte');
     if (!dernierEtatA) return;
-    var silence = Date.now() - dernierEtatA;
+    var maintenant = Date.now();
+    var silence = maintenant - dernierEtatA;
     if (silence > SILENCE_MS) {
       UI.alerte(el, 'Contact perdu avec l’écran central. On réessaie… Vérifie ta connexion.');
+      // Le voyant doit dire la vérité : une socket restée ouverte mais muette est
+      // un lien perdu, même si le navigateur ne l’a pas encore signalé.
+      UI.setStatut($('statut-joueur'), $('statut-joueur-txt'), {
+        state: 'offline',
+        brokerLabel: statutLien.brokerLabel,
+        detail: 'Plus de signal',
+      });
+      // Et on ne se contente pas de l’afficher : on relance le lien.
+      if (maintenant - dernierReveil > 10000) {
+        dernierReveil = maintenant;
+        if (link) link.reveiller();
+      }
     } else if (outbox && outbox.pendingCount() > 0 && outbox.oldestAge() > 2500) {
       UI.alerte(el, 'Tes dernières mises n’ont pas encore été confirmées. On insiste, ne re-tape pas.', true);
     } else {
@@ -290,6 +305,7 @@
       brokerIndex: opts.brokerIndex || 0,
       onMessage: surEtat,
       onStatus: function (st) {
+        statutLien = st;
         UI.setStatut($('statut-identite'), $('statut-identite-txt'), st);
         UI.setStatut($('statut-joueur'), $('statut-joueur-txt'), st);
         if (st.state === 'error') {
