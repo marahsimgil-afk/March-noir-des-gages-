@@ -962,7 +962,12 @@ function ecranHote(hote) {
   }
 
   /* --- choix du lot --- */
+  // Construit une seule fois : ce panneau contient un champ de saisie, le
+  // reconstruire ferait disparaître le gage que l'organisatrice est en train
+  // d'écrire (et son curseur avec).
+  var panneauChoixCache = null;
   function panneauChoixLot() {
+    if (panneauChoixCache) return panneauChoixCache;
     var champLibre = h('input', {
       class: 'champ', placeholder: 'Écrire un gage sur mesure…', maxlength: '140', autocomplete: 'off'
     });
@@ -1009,10 +1014,14 @@ function ecranHote(hote) {
       if (!choixGage.texte) return;
       Son.reveiller();
       hote.lancerLot(choixGage.texte, duree);
+      // Le panneau est réutilisé tel quel pour le lot suivant : on le remet à zéro.
       choixGage = { texte: '', index: -1 };
+      champLibre.value = '';
+      Array.prototype.forEach.call(listeGages.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+      majBouton();
     });
 
-    return h('div', { class: 'carton' }, [
+    panneauChoixCache = h('div', { class: 'carton' }, [
       h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Lot suivant'),
       champLibre,
       h('button', {
@@ -1034,6 +1043,7 @@ function ecranHote(hote) {
       segments,
       boutonLancer
     ]);
+    return panneauChoixCache;
   }
 
   /* --- enchère en cours --- */
@@ -1237,8 +1247,27 @@ function ecranHote(hote) {
     return '???';
   }
 
+  // Ce que l'écran montre réellement. Le battement de l'écran central republie
+  // l'état toutes les 6 secondes sans que rien n'ait bougé : sans cette
+  // signature, on redessinerait tout pour rien.
+  function signature(etat) {
+    var l = etat.lot;
+    return [
+      l ? l.id + ':' + l.statut + ':' + l.montant + ':' + (l.meneur || '') + ':' + (l.prolonge ? 1 : 0) + ':' + l.fin : 'vide',
+      etat.joueurs.map(function (j) { return j.id + '=' + (etat.ardoise[j.id] || 0); }).join(','),
+      (etat.enLigne || []).join(','),
+      etat.hist.length,
+      l ? Object.keys(l.offres).sort().join(',') : ''
+    ].join('|');
+  }
+  var derniereSignature = null;
+
   function dessiner() {
     var etat = hote.etat();
+    var sig = signature(etat);
+    if (sig === derniereSignature && lotZone.firstChild) return;
+    derniereSignature = sig;
+
     var statut = etat.lot ? etat.lot.statut : 'vide';
     var doitRedessinerLot = true;
 
