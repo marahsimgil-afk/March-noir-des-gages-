@@ -1266,11 +1266,15 @@ function ecranHote(hote) {
       else if (ancien) lotZone.removeChild(ancien);
     }
 
-    vider(coteZone);
-    if (!etat.lot) coteZone.appendChild(panneauChoixLot());
-    coteZone.appendChild(panneauArdoise(etat));
-    var hist = panneauHistorique(etat);
-    if (hist) coteZone.appendChild(hist);
+    // Pendant une enchère, l'ardoise et l'historique ne bougent pas : inutile
+    // de reconstruire toute la colonne à chaque mise (jusqu'à 8 fois/seconde).
+    if (doitRedessinerLot || !coteZone.firstChild) {
+      vider(coteZone);
+      if (!etat.lot) coteZone.appendChild(panneauChoixLot());
+      coteZone.appendChild(panneauArdoise(etat));
+      var hist = panneauHistorique(etat);
+      if (hist) coteZone.appendChild(hist);
+    }
 
     dernierStatut = statut;
     dernierMontant = etat.lot ? etat.lot.montant : 0;
