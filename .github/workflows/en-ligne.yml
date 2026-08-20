@@ -70,10 +70,17 @@ jobs:
                 # les fichiers liés doivent suivre
                 base=$(dirname "$u")
                 for f in style.css app.js vendor/mqtt.min.js vendor/qrcode.min.js; do
-                  c=$(curl -sS -L -o /dev/null -w '%{http_code}' "$base/$f")
-                  echo "  $f → $c"
+                  lu=$(curl -sS -L -o /tmp/f.bin -w '%{http_code} %{content_type} %{size_download}' "$base/$f")
+                  echo "  $f → $lu"
+                  c=$(echo "$lu" | cut -d' ' -f1)
+                  t=$(echo "$lu" | cut -d' ' -f2)
                   [ "$c" = "200" ] || { code=000; break; }
+                  case "$f" in
+                    *.js)  echo "$t" | grep -qiE 'javascript|ecmascript' || { echo "    type MIME inutilisable pour un script"; code=000; break; } ;;
+                    *.css) echo "$t" | grep -qi 'text/css' || { echo "    type MIME inutilisable pour une feuille de style"; code=000; break; } ;;
+                  esac
                 done
+                echo "  en-têtes de index.html :"; curl -sS -L -D - -o /dev/null "$u" | sed 's/^/    /' | head -20
               else
                 code=000
               fi

@@ -41,7 +41,13 @@ async function newDevice(label, viewport) {
   const ctx = await browser.newContext({ viewport: viewport ?? { width: 1440, height: 810 }, ...(viewport ? PHONE : {}) });
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log(`  \x1b[31m[${label}] erreur JS:\x1b[0m ${e.message}`));
-  page.on('console', m => { if (m.type() === 'error') console.log(`  \x1b[33m[${label}] console:\x1b[0m ${m.text().slice(0, 160)}`); });
+  page.on('console', m => { if (m.type() === 'error') console.log(`  \x1b[33m[${label}] console:\x1b[0m ${m.text().slice(0, 200)}`); });
+  page.on('requestfailed', r => console.log(`  \x1b[31m[${label}] requête échouée:\x1b[0m ${r.url().slice(-60)} — ${r.failure()?.errorText}`));
+  page.on('response', async r => {
+    if (r.status() >= 400 || (/\.(js|css|html)$/.test(new URL(r.url()).pathname) && !r.url().includes('fonts.'))) {
+      console.log(`  \x1b[90m[${label}] ${r.status()} ${r.headers()['content-type'] || '—'}  ${r.url().slice(-52)}\x1b[0m`);
+    }
+  });
   return { ctx, page, label };
 }
 
@@ -50,7 +56,15 @@ console.log('\n\x1b[1m═══ LE MARCHÉ NOIR DES GAGES — test multi-apparei
 // ─────────────────────────────────────────────── 1. Écran central
 console.log('\x1b[1m1. Écran central : création de la vente\x1b[0m');
 const tv = await newDevice('TV');
-await tv.page.goto(url('setup'), { waitUntil: 'networkidle' });
+await tv.page.goto(url('setup'), { waitUntil: 'domcontentloaded' });
+await tv.page.waitForSelector('#names-list .name-input', { timeout: 20000 }).catch(() => {});
+const diag = await tv.page.evaluate(() => ({
+  mqtt: typeof window.mqtt, qr: typeof window.QRCodeLib,
+  ecrans: document.querySelectorAll('.screen').length,
+  actif: (document.querySelector('.screen.is-active') || {}).id || 'aucun'
+}));
+console.log(`  \x1b[90mchargement : mqtt=${diag.mqtt} qrcode=${diag.qr} écrans=${diag.ecrans} actif=${diag.actif}\x1b[0m`);
+check(diag.mqtt === 'object' && diag.qr === 'object', 'les librairies embarquées sont chargées');
 const rows = await tv.page.locator('#names-list .name-input').count();
 check(rows === 9, `formulaire prêt avec ${rows} champs de prénom`);
 for (let i = 0; i < NAMES.length; i++) await tv.page.locator('#names-list .name-input').nth(i).fill(NAMES[i]);
