@@ -7,6 +7,8 @@ son téléphone, tout est synchronisé en temps réel.
 
 Aucun compte, aucune installation : les joueurs scannent un QR code.
 
+**→ https://marahsimgil-afk.github.io/March-noir-des-gages-/**
+
 ---
 
 ## Le soir J — 4 étapes
@@ -79,3 +81,7 @@ rechargement de page et mode secours hors-ligne.
 
 Le même test est rejoué par GitHub Actions contre l'application **réellement en
 ligne** et les **brokers publics réels** (`.github/workflows/en-ligne.yml`).
+Mesures relevées sur l'application publiée, depuis un runner GitHub : une mise
+tapée sur un téléphone atteint l'écran central en 190 ms, redescend vers les
+autres téléphones en 130 ms, et 160 mises envoyées en rafale par huit
+téléphones sont comptabilisées sans perte.
