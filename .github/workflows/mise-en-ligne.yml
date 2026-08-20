@@ -1,9 +1,15 @@
 name: Mise en ligne et vérification réelle
 
 # Le bac à sable de développement n'a d'accès réseau que vers GitHub : il ne peut
-# joindre ni l'URL publique ni les brokers MQTT. C'est donc ce workflow, exécuté
+# joindre ni une URL publique ni les brokers MQTT. C'est donc ce workflow, exécuté
 # sur un runner GitHub à l'accès Internet normal, qui met en ligne puis vérifie
 # réellement la synchronisation multi-appareils.
+#
+# Deux questions distinctes, traitées séparément :
+#   1. quelle adresse publique affiche réellement l'application ?
+#   2. la synchronisation fonctionne-t-elle sur les vrais brokers publics ?
+# La seconde est vérifiée dans tous les cas — au besoin en servant le site
+# localement sur le runner, le transport temps réel restant, lui, bien réel.
 
 on:
   push:
@@ -27,8 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Publication du site sur la branche gh-pages. C'est aussi la source que
-      # GitHub Pages utilisera une fois activé sur le dépôt.
+      # Publication du site sur la branche gh-pages : c'est la source que GitHub
+      # Pages servira dès qu'il sera activé sur le dépôt.
       - name: Publier la branche gh-pages
         run: |
           set -eux
@@ -51,34 +57,43 @@ jobs:
       - run: npm ci || npm install
 
       - name: Tests unitaires des règles
-        run: node tests/unit-game.js
+        run: |
+          set -o pipefail
+          node tests/unit-game.js | tee /tmp/unit.txt
 
       - name: État des brokers MQTT publics
         run: |
           set -o pipefail
           node tests/check-brokers.js | tee /tmp/brokers.txt
 
-      # Quelle adresse publique fonctionne réellement, sans réglage manuel ?
-      - name: Choisir l'adresse publique
-        id: adresse
-        run: |
-          set -o pipefail
-          # Ordre de préférence : GitHub Pages (la bonne adresse, dès qu'elle est
-          # activée sur le dépôt), puis les CDN qui savent servir une branche.
-          node tests/sonde-urls.js \
-            "https://marahsimgil-afk.github.io/March-noir-des-gages-" \
-            "https://cdn.statically.io/gh/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
-            "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
-            "https://cdn.jsdelivr.net/gh/marahsimgil-afk/March-noir-des-gages-@gh-pages" \
-            | tee /tmp/sonde.txt
-          echo "url=$(grep '^RETENUE=' /tmp/sonde.txt | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
-
       - name: Installer Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Suite multi-appareils contre l'infra publique
+      - name: Quelle adresse publique affiche l'application ?
+        id: adresse
+        run: |
+          set -o pipefail
+          node tests/sonde-urls.js \
+            "https://marahsimgil-afk.github.io/March-noir-des-gages-" \
+            "https://cdn.statically.io/gh/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://raw.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            "https://rawcdn.githack.com/marahsimgil-afk/March-noir-des-gages-/gh-pages" \
+            | tee /tmp/sonde.txt
+          url="$(grep '^RETENUE=' /tmp/sonde.txt | cut -d= -f2-)"
+          if [ -n "$url" ]; then
+            echo "base=$url" >> "$GITHUB_OUTPUT"
+            echo "publique=oui" >> "$GITHUB_OUTPUT"
+          else
+            # Repli : le site est servi par le runner, mais la synchronisation
+            # passe quand même par les vrais brokers publics — c'est le maillon
+            # qui compte et il reste testé pour de bon.
+            echo "base=http://localhost:8080" >> "$GITHUB_OUTPUT"
+            echo "publique=non" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Suite multi-appareils sur les vrais brokers
         env:
-          MNG_BASE: ${{ steps.adresse.outputs.url }}
+          MNG_BASE: ${{ steps.adresse.outputs.base }}
           MNG_WS: ''
         run: npx playwright test --reporter=list
 
@@ -86,17 +101,24 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Adresse publique retenue"
+            echo "## Adresse publique"
             echo ""
-            echo "\`${{ steps.adresse.outputs.url }}/index.html\`"
+            if [ "${{ steps.adresse.outputs.publique }}" = "oui" ]; then
+              echo "\`${{ steps.adresse.outputs.base }}/index.html\`"
+            else
+              echo "**Aucune adresse publique ne sert encore l'application.**"
+              echo "Activer GitHub Pages sur le dépôt (Settings → Pages → branche \`gh-pages\`)"
+              echo "suffit : la branche est déjà publiée et tenue à jour par ce workflow."
+              echo ""
+              echo "La synchronisation a malgré tout été vérifiée sur les vrais brokers"
+              echo "publics, le site étant servi localement par le runner."
+            fi
             echo ""
             echo "## Brokers MQTT publics"
-            echo ""
             echo '```'
             cat /tmp/brokers.txt 2>/dev/null || true
             echo '```'
             echo "## Adresses sondées"
-            echo ""
             echo '```'
             cat /tmp/sonde.txt 2>/dev/null || true
             echo '```'

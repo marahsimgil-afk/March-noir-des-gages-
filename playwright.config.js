@@ -7,20 +7,23 @@ const fs = require('fs');
 const CHROMIUM_FOURNI = '/opt/pw-browsers/chromium';
 const executablePath = fs.existsSync(CHROMIUM_FOURNI) ? CHROMIUM_FOURNI : undefined;
 
-// Contre l'infra publique (URL GitHub Pages + brokers MQTT publics), on ne lance
-// pas de serveur local et on laisse plus de marge aux latences réseau.
-const CIBLE_LOCALE = !process.env.MNG_BASE;
+// Le serveur statique local n'est lancé que si la cible est locale. Le transport
+// temps réel, lui, est choisi indépendamment par MNG_WS : on peut donc servir le
+// site depuis la machine tout en synchronisant via les vrais brokers publics.
+const CIBLE_LOCALE = !process.env.MNG_BASE || process.env.MNG_BASE.includes('localhost');
+// Sans MNG_WS, l'application utilise les brokers publics : latences plus élevées.
+const RESEAU_REEL = process.env.MNG_WS === '';
 
 module.exports = defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.js',
-  timeout: CIBLE_LOCALE ? 90000 : 180000,
+  timeout: RESEAU_REEL ? 180000 : 90000,
   expect: { timeout: 10000 },
   // Les tests partagent des brokers publics : on les sérialise pour que les
   // rafales de l'un ne faussent pas les mesures de l'autre.
   workers: 1,
   fullyParallel: false,
-  retries: CIBLE_LOCALE ? 0 : 1,
+  retries: RESEAU_REEL ? 1 : 0,
   reporter: [['list']],
   use: {
     headless: true,
