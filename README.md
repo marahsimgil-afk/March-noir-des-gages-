@@ -29,14 +29,20 @@ C'est cette adresse qui devient le lien de la soirée. Elle ne change plus.
 ## Mode d'emploi du soir J
 
 1. Sur la tablette branchée à la TV, ouvre le lien, choisis **« Écran central »**,
-   tape les 9 prénoms, puis **« Ouvrir la salle des ventes »**.
+   tape les 9 prénoms, puis **tous les gages d'un coup** — un par ligne, dans
+   l'ordre où tu veux les vendre. **« Ouvrir la salle des ventes »**.
 2. Un QR code s'affiche : chacun le scanne avec l'appareil photo de son téléphone
    et choisit son prénom. (Le bouton **« Afficher le QR »** le remet à l'écran
    pour un retardataire.)
-3. Sur la TV : choisis un gage (ou écris le tien), règle la durée, **« Mettre en
-   vente »**. Les autres tapent **+1** autant qu'ils veulent.
-4. À la fin du minuteur, **« Valider et inscrire à l'ardoise »**. Le gagnant
-   annonce à voix haute qui fait le gage. On recommence.
+3. Le premier gage est déjà affiché. Choisis la durée, **« Démarrer l'enchère »**.
+   Les autres tapent **+1** autant qu'ils veulent.
+4. À la fin, **« Valider et inscrire à l'ardoise »** : le gage suivant s'affiche
+   tout seul. Plus rien à taper — durée, démarrer, valider, et on enchaîne.
+5. Au dernier gage, le **Registre** s'ouvre de lui-même : l'ardoise finale de
+   chacun et qui a acheté quoi. Chaque téléphone affiche son propre relevé.
+
+Tu peux à tout moment **passer un lot**, **ajouter des gages** en cours de route,
+ou rouvrir le **Récapitulatif**.
 
 Si le WiFi te lâche complètement, il reste le **mode secours** (lien en bas de
 l'accueil) : tout se joue sur un seul écran, sans réseau.
@@ -55,6 +61,12 @@ Les CDN qui servent les dépôts publics (jsDelivr, statically, githack) ont ét
 essayés et écartés, mesures à l'appui : ils renvoient le HTML en `text/plain`
 ou intercalent leur propre page d'avertissement, et l'application ne démarre
 jamais. GitHub Pages est la seule voie qui sert vraiment la page.
+
+**Le programme est la colonne vertébrale.** Tous les gages sont saisis avant
+l'ouverture de la salle ; chaque entrée garde ensuite son résultat (vendu à qui,
+pour combien, ou passé). Le panneau « lot suivant », l'historique et le
+récapitulatif final ne sont que trois lectures de cette même liste — il n'y a
+pas de comptes tenus en double.
 
 **L'écran central est la seule autorité.** Il détient l'état de la partie, applique
 les mises et republie l'état complet en message *retained* : un téléphone qui
@@ -109,6 +121,9 @@ deux téléphones, plus un retardataire) et vérifie notamment :
 - un retardataire qui arrive en cours d'enchère récupère l'état courant ;
 - l'adjudication met bien à jour l'ardoise partout ;
 - une mise dans les 3 dernières secondes prolonge l'enchère ;
+- les lots s'enchaînent tout seuls dans l'ordre du programme ;
+- le récapitulatif s'ouvre de lui-même au dernier lot, avec l'ardoise de chacun
+  et la liste de qui a acheté quoi ;
 - un téléphone coupé du réseau l'affiche, puis se reconnecte tout seul.
 
 Ces tests tournent aussi dans GitHub Actions (`.github/workflows/verification.yml`),

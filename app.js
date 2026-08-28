@@ -32,7 +32,6 @@ var BROKERS = [
 var ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I, O, 0, 1
 var DUREES = [20, 30, 45, 60];
 var PROLONGATION_MS = 3000;   // anti-snipe : toute mise dans les 3 dernières secondes relance à 3 s
-var MAX_HIST = 40;
 
 var GAGES = [
   "Désigner qui porte un chapeau ridicule toute la soirée",
@@ -343,24 +342,31 @@ function creerBandeau() {
    5. Écran central (hôte) — logique
    --------------------------------------------------------- */
 
-function creerHote(code, broker, joueursInitiaux, etatRepris) {
+function creerHote(code, broker, joueursInitiaux, programmeInitial, etatRepris) {
   var t = topics(code);
   var nonces = [];       // anti-doublon des mises (QoS 1 peut redélivrer)
   var noncesSet = {};
   var vus = {};          // pid -> timestamp de dernière activité
 
+  // Le programme est la colonne vertébrale de la soirée : tous les gages sont
+  // saisis d'avance, on les vend dans l'ordre, et chaque entrée garde son
+  // résultat. L'historique et le récapitulatif final s'en déduisent.
   var etat = etatRepris || {
-    v: 1,
+    v: 2,
     code: code,
     rev: 0,
     hostNow: Date.now(),
     joueurs: joueursInitiaux.map(function (n) { return { id: slug(n), nom: n }; }),
     ardoise: {},
     enLigne: [],
+    programme: (programmeInitial || []).map(function (titre) {
+      return { id: idUnique(), titre: titre, statut: 'attente', pid: null, montant: 0, ts: 0 };
+    }),
     lot: null,
-    hist: []
+    recap: false
   };
   etat.code = code;
+  if (!etat.programme) etat.programme = [];
 
   var lien = creerLien({
     url: broker.url,
@@ -399,12 +405,20 @@ function creerHote(code, broker, joueursInitiaux, etatRepris) {
     ecrire('mng.hote', {
       code: code, brokerId: broker.id, ts: Date.now(),
       etat: { v: etat.v, code: etat.code, rev: etat.rev, joueurs: etat.joueurs,
-              ardoise: etat.ardoise, lot: etat.lot, hist: etat.hist, enLigne: [] }
+              ardoise: etat.ardoise, lot: etat.lot, programme: etat.programme,
+              recap: etat.recap, enLigne: [] }
     });
   }
 
   function joueurConnu(pid) {
     for (var i = 0; i < etat.joueurs.length; i++) if (etat.joueurs[i].id === pid) return etat.joueurs[i];
+    return null;
+  }
+
+  function entreeProgramme(id) {
+    for (var i = 0; i < etat.programme.length; i++) {
+      if (etat.programme[i].id === id) return etat.programme[i];
+    }
     return null;
   }
 
@@ -483,10 +497,29 @@ function creerHote(code, broker, joueursInitiaux, etatRepris) {
     lien: lien,
     etat: function () { return etat; },
 
-    lancerLot: function (titre, dureeSec) {
+    // Le prochain lot à vendre : la première entrée encore en attente.
+    prochain: function () {
+      for (var i = 0; i < etat.programme.length; i++) {
+        if (etat.programme[i].statut === 'attente') return etat.programme[i];
+      }
+      return null;
+    },
+
+    position: function () {
+      var vendus = 0, total = etat.programme.length;
+      for (var i = 0; i < etat.programme.length; i++) {
+        if (etat.programme[i].statut !== 'attente') vendus++;
+      }
+      return { faits: vendus, total: total, restants: total - vendus };
+    },
+
+    demarrerProchain: function (dureeSec) {
+      var p = api.prochain();
+      if (!p || etat.lot) return;
+      etat.recap = false;
       etat.lot = {
-        id: idUnique(),
-        titre: titre,
+        id: p.id,
+        titre: p.titre,
         statut: 'ouvert',
         duree: dureeSec * 1000,
         debut: Date.now(),
@@ -499,6 +532,26 @@ function creerHote(code, broker, joueursInitiaux, etatRepris) {
       publier(true);
     },
 
+    // Sauter un gage sans le vendre (il ne reviendra pas).
+    passerProchain: function () {
+      var p = api.prochain();
+      if (!p || etat.lot) return;
+      p.statut = 'retire';
+      publier(true);
+    },
+
+    ajouterGages: function (titres) {
+      titres.forEach(function (titre) {
+        var t = String(titre).trim();
+        if (!t) return;
+        etat.programme.push({ id: idUnique(), titre: t, statut: 'attente', pid: null, montant: 0, ts: 0 });
+      });
+      etat.recap = false;
+      publier(true);
+    },
+
+    montrerRecap: function (oui) { etat.recap = !!oui; publier(true); },
+
     cloturer: function () {
       if (etat.lot && etat.lot.statut === 'ouvert') {
         etat.lot.statut = 'adjuge';
@@ -510,17 +563,26 @@ function creerHote(code, broker, joueursInitiaux, etatRepris) {
     valider: function () {
       var lot = etat.lot;
       if (!lot || lot.statut !== 'adjuge') return;
+      var entree = entreeProgramme(lot.id);
       if (lot.meneur) {
         etat.ardoise[lot.meneur] = (etat.ardoise[lot.meneur] || 0) + lot.montant;
-        etat.hist.unshift({
-          titre: lot.titre, pid: lot.meneur, montant: lot.montant, ts: Date.now()
-        });
-        if (etat.hist.length > MAX_HIST) etat.hist.length = MAX_HIST;
+        if (entree) {
+          entree.statut = 'vendu';
+          entree.pid = lot.meneur;
+          entree.montant = lot.montant;
+          entree.ts = Date.now();
+        }
+      } else if (entree) {
+        entree.statut = 'retire';
+        entree.ts = Date.now();
       }
       etat.lot = null;
+      // Dernier gage vendu : le récapitulatif s'ouvre tout seul sur la TV.
+      if (!api.prochain()) etat.recap = true;
       publier(true);
     },
 
+    // Le lot ne compte pas : il retourne dans le programme, à vendre plus tard.
     annulerLot: function () { etat.lot = null; publier(true); },
 
     ajusterArdoise: function (pid, delta) {
@@ -803,6 +865,26 @@ function ecranHoteConfig() {
   var depart = (sauve && sauve.length) ? sauve : ['', '', '', '', '', '', '', '', ''];
   for (var i = 0; i < depart.length; i++) ajouterChamp(depart[i]);
 
+  // Tous les gages d'un coup : une ligne = un lot. C'est le programme de la
+  // vente, et il ne sera plus à retaper de la soirée.
+  var gagesSauves = lire('mng.programme');
+  var zoneGages = h('textarea', {
+    class: 'champ', rows: '10', spellcheck: 'false',
+    placeholder: 'Un gage par ligne…'
+  });
+  zoneGages.value = (gagesSauves && gagesSauves.length ? gagesSauves : GAGES).join('\n');
+  var compteur = h('div', { class: 'tres-discret compte-programme', style: 'margin-top:8px' });
+
+  function lireProgramme() {
+    return zoneGages.value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  }
+  function majCompteur() {
+    var n = lireProgramme().length;
+    compteur.textContent = n + (n > 1 ? ' lots au programme' : ' lot au programme');
+  }
+  zoneGages.addEventListener('input', majCompteur);
+  majCompteur();
+
   var boutonLancer = h('button', { class: 'btn or large' }, 'Ouvrir la salle des ventes');
   var etatConnexion = h('div', { class: 'tres-discret centrer' });
 
@@ -815,12 +897,15 @@ function ecranHoteConfig() {
       vus[s] = 1;
     }
     if (noms.length < 2) { err.textContent = 'Il faut au moins 2 joueurs.'; return; }
+    var programme = lireProgramme();
+    if (!programme.length) { err.textContent = 'Il faut au moins un gage au programme.'; return; }
     err.textContent = '';
     ecrire('mng.noms', noms);
+    ecrire('mng.programme', programme);
     boutonLancer.disabled = true;
     boutonLancer.textContent = 'Ouverture…';
     Son.reveiller();
-    ouvrirSalle(noms, etatConnexion, function () {
+    ouvrirSalle(noms, programme, etatConnexion, function () {
       boutonLancer.disabled = false;
       boutonLancer.textContent = 'Réessayer';
     });
@@ -836,6 +921,20 @@ function ecranHoteConfig() {
         onclick: function () { ajouterChamp('').focus(); }
       }, '+ Ajouter un joueur'),
       err
+    ]),
+    h('div', { class: 'carton dore', style: 'width:min(520px,100%);text-align:left' }, [
+      h('div', { class: 'rangee', style: 'margin-bottom:12px' }, [
+        h('div', { class: 'etiquette' }, 'Le programme de la vente'),
+        h('button', {
+          class: 'btn fantome mini pousse',
+          onclick: function () { zoneGages.value = GAGES.join('\n'); majCompteur(); }
+        }, 'Liste par défaut')
+      ]),
+      zoneGages,
+      compteur,
+      h('p', { class: 'tres-discret', style: 'margin:8px 0 0' },
+        'Un gage par ligne. Ils seront vendus dans cet ordre — plus rien à taper de la soirée. ' +
+        'Tu pourras toujours en ajouter en cours de route.')
     ]),
     h('div', { class: 'pile g12', style: 'width:min(520px,100%)' }, [
       boutonLancer,
@@ -855,7 +954,7 @@ function ecranHoteConfig() {
 }
 
 /* Choisit le premier broker qui répond, puis ouvre la salle. */
-function ouvrirSalle(noms, zoneEtat, onEchec) {
+function ouvrirSalle(noms, programme, zoneEtat, onEchec) {
   var liste = brokersDisponibles();
   zoneEtat.textContent = 'Recherche d’une ligne sécurisée…';
   courseBrokers(liste, function (broker) {
@@ -870,7 +969,7 @@ function ouvrirSalle(noms, zoneEtat, onEchec) {
       return;
     }
     var code = broker.id + alea(4);
-    var hote = creerHote(code, broker, noms, null);
+    var hote = creerHote(code, broker, noms, programme, null);
     App.demarrerHote(hote);
   });
 }
@@ -878,7 +977,7 @@ function ouvrirSalle(noms, zoneEtat, onEchec) {
 function reprendreSalle(repris, zoneEtat) {
   var broker = brokerParId(repris.brokerId) || brokersDisponibles()[0];
   zoneEtat.textContent = 'Reprise de la salle ' + repris.code + '…';
-  var hote = creerHote(repris.code, broker, [], repris.etat);
+  var hote = creerHote(repris.code, broker, [], [], repris.etat);
   App.demarrerHote(hote);
 }
 
@@ -930,7 +1029,8 @@ function ecranHote(hote) {
   var lotZone = h('div', { class: 'colonne' });
   var coteZone = h('div', { class: 'colonne' });
   var plateau = h('div', { class: 'plateau' }, [lotZone, coteZone]);
-  var root = h('div', { class: 'vue' }, [bandeau.root, plateau]);
+  var recapZone = h('div', { class: 'vue masque', style: 'overflow-y:auto;-webkit-overflow-scrolling:touch' });
+  var root = h('div', { class: 'vue' }, [bandeau.root, plateau, recapZone]);
 
   var choixGage = { texte: '', index: -1 };
   var duree = lire('mng.duree') || 30;
@@ -961,20 +1061,27 @@ function ecranHote(hote) {
     ]);
   }
 
-  /* --- choix du lot --- */
-  // Construit une seule fois : ce panneau contient un champ de saisie, le
-  // reconstruire ferait disparaître le gage que l'organisatrice est en train
-  // d'écrire (et son curseur avec).
-  var panneauChoixCache = null;
-  function panneauChoixLot() {
-    if (panneauChoixCache) return panneauChoixCache;
-    var champLibre = h('input', {
-      class: 'champ', placeholder: 'Écrire un gage sur mesure…', maxlength: '140', autocomplete: 'off'
-    });
-    var listeGages = h('div', { class: 'scroll-zone', style: 'margin-top:10px' });
-    var boutonLancer = h('button', { class: 'btn or large', style: 'margin-top:14px' }, 'Mettre en vente');
-    var segments = h('div', { class: 'segmente', style: 'margin-top:10px' });
+  /* --- lot suivant, tiré du programme --- */
+  function panneauProchain(etat) {
+    var pos = hote.position();
+    var p = hote.prochain();
 
+    if (!p) {
+      return h('div', { class: 'carton dore', style: 'text-align:center' }, [
+        h('div', { class: 'etiquette' }, 'Programme terminé'),
+        h('p', { class: 'discret', style: 'margin:14px auto' }, 'Tous les lots sont passés.'),
+        h('button', {
+          class: 'btn or large',
+          onclick: function () { hote.montrerRecap(true); }
+        }, 'Voir le récapitulatif'),
+        h('button', {
+          class: 'btn fantome large', style: 'margin-top:8px',
+          onclick: ouvrirAjoutGages
+        }, '+ Ajouter des gages')
+      ]);
+    }
+
+    var segments = h('div', { class: 'segmente', style: 'margin-top:10px' });
     DUREES.forEach(function (d) {
       var b = h('button', { 'aria-pressed': String(d === duree), text: d + ' s' });
       b.addEventListener('click', function () {
@@ -985,65 +1092,47 @@ function ecranHote(hote) {
       segments.appendChild(b);
     });
 
-    GAGES.forEach(function (g, i) {
-      var b = h('button', { class: 'puce-gage', 'aria-pressed': String(choixGage.index === i), text: g });
-      b.addEventListener('click', function () {
-        choixGage = { texte: g, index: i };
-        champLibre.value = '';
-        Array.prototype.forEach.call(listeGages.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
-        b.setAttribute('aria-pressed', 'true');
-        majBouton();
-      });
-      listeGages.appendChild(b);
-    });
-
-    champLibre.addEventListener('input', function () {
-      if (champLibre.value.trim()) {
-        choixGage = { texte: champLibre.value.trim(), index: -1 };
-        Array.prototype.forEach.call(listeGages.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
-      } else {
-        choixGage = { texte: '', index: -1 };
-      }
-      majBouton();
-    });
-
-    function majBouton() { boutonLancer.disabled = !choixGage.texte; }
-    majBouton();
-
-    boutonLancer.addEventListener('click', function () {
-      if (!choixGage.texte) return;
-      Son.reveiller();
-      hote.lancerLot(choixGage.texte, duree);
-      // Le panneau est réutilisé tel quel pour le lot suivant : on le remet à zéro.
-      choixGage = { texte: '', index: -1 };
-      champLibre.value = '';
-      Array.prototype.forEach.call(listeGages.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
-      majBouton();
-    });
-
-    panneauChoixCache = h('div', { class: 'carton' }, [
-      h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Lot suivant'),
-      champLibre,
-      h('button', {
-        class: 'btn fantome mini', style: 'margin-top:8px',
-        onclick: function () {
-          var g = GAGES[Math.floor(Math.random() * GAGES.length)];
-          choixGage = { texte: g, index: GAGES.indexOf(g) };
-          champLibre.value = '';
-          Array.prototype.forEach.call(listeGages.children, function (x, i) {
-            x.setAttribute('aria-pressed', String(i === choixGage.index));
-          });
-          var cible = listeGages.children[choixGage.index];
-          if (cible) cible.scrollIntoView({ block: 'nearest' });
-          majBouton();
-        }
-      }, '🎲 Piocher au hasard'),
-      listeGages,
-      h('div', { class: 'etiquette', style: 'margin-top:14px' }, 'Durée du marteau'),
+    return h('div', { class: 'carton dore', style: 'text-align:center' }, [
+      h('div', { class: 'etiquette' }, 'Lot ' + (pos.faits + 1) + ' sur ' + pos.total),
+      h('div', { class: 'gage-titre', style: 'margin:16px 0 20px' }, p.titre),
+      h('div', { class: 'etiquette' }, 'Durée du marteau'),
       segments,
-      boutonLancer
+      h('button', {
+        class: 'btn or large', style: 'margin-top:16px;padding:22px;font-size:18px',
+        onclick: function () { Son.reveiller(); hote.demarrerProchain(duree); }
+      }, 'Démarrer l’enchère'),
+      h('div', { class: 'rangee g8', style: 'margin-top:10px;justify-content:center' }, [
+        h('button', {
+          class: 'btn fantome mini',
+          onclick: function () { hote.passerProchain(); }
+        }, 'Passer ce lot'),
+        h('button', { class: 'btn fantome mini', onclick: ouvrirAjoutGages }, '+ Ajouter des gages'),
+        h('button', {
+          class: 'btn fantome mini',
+          onclick: function () { hote.montrerRecap(true); }
+        }, 'Récapitulatif')
+      ])
     ]);
-    return panneauChoixCache;
+  }
+
+  function ouvrirAjoutGages() {
+    var zone = h('textarea', { class: 'champ', rows: '6', placeholder: 'Un gage par ligne…' });
+    var m = modale([
+      h('div', { class: 'etiquette', style: 'margin-bottom:12px' }, 'Ajouter au programme'),
+      zone,
+      h('div', { class: 'pile g8', style: 'margin-top:14px' }, [
+        h('button', {
+          class: 'btn or large',
+          onclick: function () {
+            var l = zone.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+            if (l.length) hote.ajouterGages(l);
+            m.fermer();
+          }
+        }, 'Ajouter'),
+        h('button', { class: 'btn fantome large', onclick: function () { m.fermer(); } }, 'Annuler')
+      ])
+    ]);
+    setTimeout(function () { zone.focus(); }, 50);
   }
 
   /* --- enchère en cours --- */
@@ -1165,19 +1254,107 @@ function ecranHote(hote) {
     ]);
   }
 
-  function panneauHistorique(etat) {
-    if (!etat.hist.length) return null;
+  /* Le programme complet : ce qui est vendu, ce qui vient, ce qui a été passé. */
+  function panneauProgramme(etat) {
+    if (!etat.programme.length) return null;
+    var enCours = etat.lot ? etat.lot.id : null;
     return h('div', { class: 'carton' }, [
-      h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Lots vendus'),
-      h('div', { class: 'scroll-zone' }, etat.hist.map(function (x) {
-        return h('div', { class: 'ligne', style: 'align-items:flex-start' }, [
+      h('div', { class: 'rangee', style: 'margin-bottom:10px' }, [
+        h('div', { class: 'etiquette' }, 'Le programme'),
+        h('div', { class: 'etiquette pousse' }, hote.position().faits + ' / ' + etat.programme.length)
+      ]),
+      h('div', { class: 'scroll-zone' }, etat.programme.map(function (x, i) {
+        var vendu = x.statut === 'vendu';
+        var retire = x.statut === 'retire';
+        return h('div', {
+          class: 'ligne' + (x.id === enCours ? ' meneur' : ''),
+          style: 'align-items:flex-start' + (retire ? ';opacity:.4' : '')
+        }, [
+          h('span', { class: 'rang' }, String(i + 1)),
           h('span', { class: 'pile', style: 'flex:1;min-width:0' }, [
-            h('span', { class: 'nom', style: 'font-size:14px' }, nomDe(etat, x.pid)),
-            h('span', { class: 'tres-discret', style: 'margin-top:2px' }, x.titre)
+            h('span', {
+              class: 'tres-discret',
+              style: 'margin-bottom:2px' + (retire ? ';text-decoration:line-through' : '')
+            }, x.titre),
+            h('span', { class: 'nom', style: 'font-size:14px' },
+              vendu ? nomDe(etat, x.pid) : (retire ? 'passé' : (x.id === enCours ? 'en vente' : 'à venir')))
           ]),
-          h('span', { class: 'val chiffre or' }, String(x.montant))
+          h('span', { class: 'val chiffre' + (vendu ? ' or' : '') }, vendu ? String(x.montant) : '·')
         ]);
       }))
+    ]);
+  }
+
+  /* Le grand tableau de fin de soirée. */
+  function ecranRecap(etat) {
+    var vendus = etat.programme.filter(function (x) { return x.statut === 'vendu'; });
+    var parJoueur = {};
+    etat.joueurs.forEach(function (j) { parJoueur[j.id] = { j: j, lots: [], total: 0 }; });
+    vendus.forEach(function (x) {
+      if (!parJoueur[x.pid]) return;
+      parJoueur[x.pid].lots.push(x);
+      parJoueur[x.pid].total += x.montant;
+    });
+    var classement = etat.joueurs.slice().sort(function (a, b) {
+      return (etat.ardoise[b.id] || 0) - (etat.ardoise[a.id] || 0);
+    });
+    var total = 0;
+    etat.joueurs.forEach(function (j) { total += (etat.ardoise[j.id] || 0); });
+
+    var ardoise = h('div', { class: 'carton dore' }, [
+      h('div', { class: 'etiquette', style: 'margin-bottom:14px' }, 'L’ardoise finale — gorgées dues'),
+      h('div', {}, classement.map(function (j, i) {
+        var d = parJoueur[j.id] || { lots: [] };
+        return h('div', { class: 'ligne recap-ligne' + (i === 0 ? ' meneur' : '') }, [
+          h('span', { class: 'rang recap-rang' }, String(i + 1)),
+          h('span', { class: 'pile', style: 'flex:1;min-width:0' }, [
+            h('span', { class: 'recap-nom' }, j.nom),
+            h('span', { class: 'tres-discret' },
+              d.lots.length ? (d.lots.length + (d.lots.length > 1 ? ' lots remportés' : ' lot remporté')) : 'aucun lot')
+          ]),
+          h('span', { class: 'recap-montant chiffre' }, String(etat.ardoise[j.id] || 0))
+        ]);
+      })),
+      h('div', { class: 'rangee', style: 'margin-top:14px' }, [
+        h('div', { class: 'etiquette' }, 'Total de la soirée'),
+        h('div', { class: 'etiquette pousse or' }, total + ' gorgées')
+      ])
+    ]);
+
+    var registre = h('div', { class: 'carton' }, [
+      h('div', { class: 'etiquette', style: 'margin-bottom:14px' }, 'Qui a acheté quoi'),
+      vendus.length
+        ? h('div', {}, vendus.map(function (x, i) {
+            return h('div', { class: 'ligne', style: 'align-items:flex-start' }, [
+              h('span', { class: 'rang' }, String(i + 1)),
+              h('span', { class: 'pile', style: 'flex:1;min-width:0' }, [
+                h('span', { class: 'nom', style: 'font-size:17px' }, nomDe(etat, x.pid)),
+                h('span', { class: 'tres-discret', style: 'margin-top:3px' }, x.titre)
+              ]),
+              h('span', { class: 'val chiffre or', style: 'font-size:20px' }, String(x.montant))
+            ]);
+          }))
+        : h('p', { class: 'discret' }, 'Aucun lot vendu.')
+    ]);
+
+    return h('div', { class: 'pile recap', style: 'padding:var(--pad)' }, [
+      h('div', { class: 'enseigne', style: 'margin-bottom:var(--pad)' }, [
+        h('span', { class: 'petit' }, 'Clôture de la vente'),
+        h('span', { class: 'gros' }, 'Le Registre'),
+        h('span', { class: 'filet' })
+      ]),
+      h('div', { class: 'plateau', style: 'padding:0' }, [
+        h('div', { class: 'colonne' }, [ardoise]),
+        h('div', { class: 'colonne' }, [registre])
+      ]),
+      h('div', { class: 'rangee g8', style: 'justify-content:center;margin-top:var(--pad);flex-wrap:wrap' }, [
+        h('button', {
+          class: 'btn or',
+          onclick: function () { hote.montrerRecap(false); }
+        }, 'Revenir à la vente'),
+        h('button', { class: 'btn fantome', onclick: ouvrirAjoutGages }, '+ Ajouter des gages'),
+        h('button', { class: 'btn fantome', onclick: ouvrirQR }, 'Afficher le QR')
+      ])
     ]);
   }
 
@@ -1256,7 +1433,8 @@ function ecranHote(hote) {
       l ? l.id + ':' + l.statut + ':' + l.montant + ':' + (l.meneur || '') + ':' + (l.prolonge ? 1 : 0) + ':' + l.fin : 'vide',
       etat.joueurs.map(function (j) { return j.id + '=' + (etat.ardoise[j.id] || 0); }).join(','),
       (etat.enLigne || []).join(','),
-      etat.hist.length,
+      etat.programme.map(function (x) { return x.statut + (x.pid || '') + x.montant; }).join('~'),
+      etat.recap ? 'R' : '-',
       l ? Object.keys(l.offres).sort().join(',') : ''
     ].join('|');
   }
@@ -1268,8 +1446,22 @@ function ecranHote(hote) {
     if (sig === derniereSignature && lotZone.firstChild) return;
     derniereSignature = sig;
 
-    var statut = etat.lot ? etat.lot.statut : 'vide';
+    var statut = etat.lot ? etat.lot.statut : (etat.recap ? 'recap' : 'vide');
     var doitRedessinerLot = true;
+
+    // Le récapitulatif prend tout l'écran : c'est le moment où l'on regarde
+    // les comptes, pas la salle des ventes.
+    if (etat.recap && !etat.lot) {
+      plateau.classList.add('masque');
+      vider(recapZone);
+      recapZone.classList.remove('masque');
+      recapZone.appendChild(ecranRecap(etat));
+      dernierStatut = statut;
+      return;
+    }
+    plateau.classList.remove('masque');
+    recapZone.classList.add('masque');
+    vider(recapZone);
 
     // Pendant une enchère ouverte, on ne recrée pas tout le panneau à chaque mise :
     // seuls le montant et le meneur changent (le minuteur a son propre rafraîchissement).
@@ -1292,11 +1484,7 @@ function ecranHote(hote) {
     if (doitRedessinerLot) {
       vider(lotZone);
       if (!etat.lot) {
-        lotZone.appendChild(h('div', { class: 'carton dore', style: 'text-align:center' }, [
-          enseigne('Salle ' + hote.code),
-          h('p', { class: 'discret', style: 'margin:18px auto 0;max-width:38ch' },
-            'Choisissez un gage à droite, réglez le marteau, et mettez-le en vente.')
-        ]));
+        lotZone.appendChild(panneauProchain(etat));
         lotZone.appendChild(panneauQR());
       } else if (etat.lot.statut === 'ouvert') {
         lotZone.appendChild(panneauLotOuvert(etat));
@@ -1319,10 +1507,9 @@ function ecranHote(hote) {
     // de reconstruire toute la colonne à chaque mise (jusqu'à 8 fois/seconde).
     if (doitRedessinerLot || !coteZone.firstChild) {
       vider(coteZone);
-      if (!etat.lot) coteZone.appendChild(panneauChoixLot());
       coteZone.appendChild(panneauArdoise(etat));
-      var hist = panneauHistorique(etat);
-      if (hist) coteZone.appendChild(hist);
+      var prog = panneauProgramme(etat);
+      if (prog) coteZone.appendChild(prog);
     }
 
     dernierStatut = statut;
@@ -1553,16 +1740,54 @@ function ecranJoueur(joueur, code, monNom) {
       return;
     }
 
+    var programme = etat.programme || [];
+    var vendus = programme.filter(function (x) { return x.statut === 'vendu'; });
+    var mesLots = vendus.filter(function (x) { return x.pid === joueur.pid; });
+    var restants = programme.filter(function (x) { return x.statut === 'attente'; }).length;
+    var termine = programme.length > 0 && restants === 0;
+
+    // Fin de la vente : chacun voit son propre relevé sur son téléphone,
+    // pendant que le grand tableau s'affiche sur la TV.
+    if (termine || etat.recap) {
+      haut.appendChild(h('div', { class: 'centre' }, [
+        h('div', { class: 'enseigne' }, [
+          h('span', { class: 'petit' }, 'Clôture de la vente'),
+          h('span', { class: 'gros' }, 'Ton relevé'),
+          h('span', { class: 'filet' })
+        ]),
+        h('div', { class: 'carton dore centrer', style: 'width:min(340px,100%)' }, [
+          h('div', { class: 'etiquette' }, monNom + ' doit'),
+          h('div', { class: 'montant-geant', style: 'font-size:clamp(56px,18vw,96px);margin:6px 0' }, String(ardoise)),
+          h('div', { class: 'etiquette' }, 'gorgées')
+        ]),
+        mesLots.length
+          ? h('div', { class: 'carton', style: 'width:min(340px,100%);text-align:left' }, [
+              h('div', { class: 'etiquette', style: 'margin-bottom:10px' }, 'Ce que tu as remporté'),
+              h('div', {}, mesLots.map(function (x) {
+                return h('div', { class: 'ligne', style: 'align-items:flex-start' }, [
+                  h('span', { class: 'tres-discret', style: 'flex:1;min-width:0' }, x.titre),
+                  h('span', { class: 'val chiffre or' }, String(x.montant))
+                ]);
+              }))
+            ])
+          : h('p', { class: 'discret' }, 'Tu n’as rien remporté. Sobre et malin.'),
+        h('p', { class: 'tres-discret' }, 'Le détail complet est sur l’écran central.')
+      ]));
+      return;
+    }
+
     haut.appendChild(h('div', { class: 'centre' }, [
       enseigne('Bonsoir ' + monNom),
-      h('p', { class: 'discret' }, 'Le prochain lot est en préparation. Reste à l’écoute.'),
+      h('p', { class: 'discret' },
+        restants ? ('Prochain lot en préparation — il en reste ' + restants + '.')
+                 : 'Le prochain lot est en préparation. Reste à l’écoute.'),
       h('div', { class: 'ligne', style: 'width:min(320px,100%)' }, [
         h('span', { class: 'etiquette' }, 'Ton ardoise'),
         h('span', { class: 'val chiffre or' }, String(ardoise))
       ]),
-      etat.hist && etat.hist.length ? h('div', { class: 'carton', style: 'width:min(340px,100%);text-align:left' }, [
+      vendus.length ? h('div', { class: 'carton', style: 'width:min(340px,100%);text-align:left' }, [
         h('div', { class: 'etiquette', style: 'margin-bottom:8px' }, 'Derniers lots'),
-        h('div', {}, etat.hist.slice(0, 4).map(function (x) {
+        h('div', {}, vendus.slice(-4).reverse().map(function (x) {
           return h('div', { class: 'ligne' }, [
             h('span', { class: 'nom', style: 'font-size:14px' }, nomDe(etat, x.pid)),
             h('span', { class: 'val chiffre or' }, String(x.montant))

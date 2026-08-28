@@ -278,6 +278,11 @@ button {
   font-size: 16px; /* >=16px : empêche le zoom auto iOS */
   outline: none;
 }
+textarea.champ {
+  resize: vertical;
+  line-height: 1.55;
+  min-height: 140px;
+}
 .champ:focus { border-color: var(--laiton-mat); }
 .champ::placeholder { color: var(--craie-faible); }
 
@@ -645,3 +650,39 @@ hr.filet-or {
 }
 
 .masque { display: none !important; }
+
+/* ---------------------------------------------------------
+   Récapitulatif de fin de vente — lisible depuis le canapé
+   --------------------------------------------------------- */
+
+.recap-ligne { padding: 10px 16px; }
+.recap-ligne + .recap-ligne { margin-top: 5px; }
+.recap-rang {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--craie-faible);
+  min-width: 28px;
+}
+.recap-nom {
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: clamp(16px, 1.9vw, 24px);
+  color: var(--craie);
+  line-height: 1.15;
+}
+.recap-montant {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: clamp(24px, 3.2vw, 40px);
+  color: var(--laiton-vif);
+  text-shadow: 0 0 16px rgba(201,162,74,.22);
+  line-height: 1;
+}
+.recap-ligne.meneur .recap-nom { color: var(--laiton-vif); }
+
+/* Deux colonnes de largeur égale : le registre a des titres longs. */
+.recap .plateau { grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .recap .plateau { grid-template-columns: 1fr 1fr; align-items: start; }
+}

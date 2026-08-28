@@ -30,6 +30,12 @@ if (PUBLIC && !BASE) {
 }
 
 const JOUEURS = ['Alice', 'Bruno', 'Chloé'];
+// Deux lots seulement : la vente se termine dans le scénario, ce qui permet de
+// vérifier que le récapitulatif final s'ouvre tout seul.
+const PROGRAMME = [
+  'Porter un chapeau ridicule toute la soirée',
+  'Danser seul au milieu du groupe'
+];
 
 let echecs = 0;
 let etapes = 0;
@@ -163,9 +169,14 @@ async function principal() {
     await tv.page.goto(url('index.html'), { waitUntil: 'domcontentloaded' });
     await tv.page.getByRole('button', { name: /Écran central/ }).click();
 
-    const champs = await tv.page.$$('.carton.dore .champ');
+    const champs = await tv.page.$$('input.champ');
     for (let i = 0; i < JOUEURS.length; i++) await champs[i].fill(JOUEURS[i]);
     ok('3 prénoms saisis', JOUEURS.join(', '));
+
+    // Tout le programme est saisi d'un coup, avant même d'ouvrir la salle.
+    await tv.page.fill('textarea.champ', PROGRAMME.join('\n'));
+    const compte = await attendre(tv.page, '.compte-programme', (t) => /lots? au programme/.test(t), 5000);
+    verifier(/^2 lots/.test(compte.texte), 'programme saisi en une fois', compte.texte);
 
     await tv.page.getByRole('button', { name: /Ouvrir la salle des ventes/ }).click();
 
@@ -198,11 +209,12 @@ async function principal() {
       `${presence.nombre} pastilles vertes en ${presence.ms} ms`);
 
     /* ---------- 3. Mise en vente ---------- */
-    titre('3. Mise en vente d’un lot');
-    await tv.page.$$eval('.puce-gage', (l) => l[0].click());
-    await tv.page.getByRole('button', { name: /Mettre en vente/ }).click();
+    titre('3. Mise en vente — le lot vient du programme');
+    const annonce = await attendre(tv.page, '.gage-titre', (t) => t.length > 0, 10000, '(lot suivant)');
+    verifier(annonce.texte === PROGRAMME[0], 'le premier lot du programme est proposé sans rien retaper', annonce.texte);
+    await tv.page.getByRole('button', { name: /Démarrer l’enchère/ }).click();
     await attendre(tv.page, '.montant-geant', () => true, 10000, '(enchère ouverte)');
-    ok('lot mis en vente depuis l’écran central');
+    ok('enchère démarrée en un bouton');
 
     for (const [tel, nom] of [[tel1, 'Alice'], [tel2, 'Bruno']]) {
       const v = await attendre(tel.page, '.btn-encherir .lib', (t) => /ENCHÉRIR/.test(t), 12000, `(bouton chez ${nom})`);
@@ -279,9 +291,10 @@ async function principal() {
 
     /* ---------- 9. Prolongation anti-sniper ---------- */
     titre('9. Prolongation si l’on mise dans les dernières secondes');
-    await tv.page.$$eval('.puce-gage', (l) => l[1].click());
+    const lot2 = await attendre(tv.page, '.gage-titre', (t) => t.length > 0, 10000, '(lot 2)');
+    verifier(lot2.texte === PROGRAMME[1], 'le lot suivant s’enchaîne tout seul', lot2.texte);
     await tv.page.$$eval('.segmente button', (l) => l[0].click()); // 20 s
-    await tv.page.getByRole('button', { name: /Mettre en vente/ }).click();
+    await tv.page.getByRole('button', { name: /Démarrer l’enchère/ }).click();
     await attendre(tv.page, '.minuteur', (t) => Number(t) > 0, 10000);
     await attendre(tv.page, '.minuteur', (t) => Number(t) <= 3, 30000, '(3 dernières secondes)');
     await tel2.page.click('.btn-encherir');
@@ -295,8 +308,27 @@ async function principal() {
     await tv.page.getByRole('button', { name: /Valider et inscrire/ }).click();
     ok('deuxième lot adjugé et validé');
 
-    /* ---------- 10. Reprise après coupure réseau ---------- */
-    titre('10. Coupure réseau sur un téléphone');
+    /* ---------- 10. Récapitulatif final ---------- */
+    titre('10. Récapitulatif de fin de vente');
+    const recap = await attendre(tv.page, '.enseigne .gros', (t) => /Registre/.test(t), 12000, '(récap auto)');
+    ok('le récapitulatif s’ouvre tout seul au dernier lot', `en ${recap.ms} ms`);
+
+    const lignesRecap = await tv.page.$$eval('.recap-ligne', (l) => l.length);
+    verifier(lignesRecap === JOUEURS.length, 'l’ardoise finale liste tous les joueurs', `${lignesRecap} lignes`);
+
+    // Scopé au récapitulatif : le plateau reste dans le DOM, simplement masqué.
+    const registre = await tv.page.$$eval('.recap .carton:not(.dore) .ligne .val',
+      (l) => l.map((e) => e.textContent.trim()));
+    verifier(registre.length === 2, 'le registre montre les deux lots vendus', registre.join(' + ') + ' gorgées');
+
+    const totalRecap = await tv.page.$eval('.recap-montant', (e) => Number(e.textContent.trim()));
+    verifier(totalRecap >= Number(attendu), 'le premier de l’ardoise porte bien son total', `${totalRecap} gorgées`);
+
+    const releve = await attendre(tel1.page, '.enseigne .gros', (t) => /relevé/i.test(t), 12000, '(relevé joueur)');
+    ok('chaque téléphone affiche son propre relevé', releve.texte);
+
+    /* ---------- 11. Reprise après coupure réseau ---------- */
+    titre('11. Coupure réseau sur un téléphone');
     await tel2.contexte.setOffline(true);
     const degrade = await attendre(
       tel2.page,

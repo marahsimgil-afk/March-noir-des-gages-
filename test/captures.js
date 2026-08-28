@@ -47,8 +47,13 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
 
   await tv.getByRole('button', { name: /Écran central/ }).click();
   const noms = ['Marah', 'Léa', 'Tom', 'Inès', 'Hugo', 'Jade', 'Malo', 'Nina', 'Yanis'];
-  const champs = await tv.$$('.carton.dore .champ');
+  const champs = await tv.$$('input.champ');
   for (let i = 0; i < noms.length; i++) await champs[i].fill(noms[i]);
+  await tv.fill('textarea.champ', [
+    'Porter un chapeau ridicule toute la soirée',
+    'Danser seul au milieu du groupe',
+    'Raconter sa pire honte amoureuse'
+  ].join('\n'));
   await dors(300);
   await tv.screenshot({ path: '/tmp/cap-2-config.png' });
 
@@ -66,8 +71,9 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
     await dors(400);
   }
 
-  await tv.$$eval('.puce-gage', (l) => l[2].click());
-  await tv.getByRole('button', { name: /Mettre en vente/ }).click();
+  await dors(400);
+  await tv.screenshot({ path: '/tmp/cap-11-prochain.png' });
+  await tv.getByRole('button', { name: /Démarrer l’enchère/ }).click();
   await attendre(tv, '.montant-geant');
   await dors(300);
 
@@ -94,6 +100,24 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
   await tv.getByRole('button', { name: /Valider et inscrire/ }).click();
   await dors(800);
   await tv.screenshot({ path: '/tmp/cap-10-ardoise.png' });
+
+  // On solde le programme pour capturer le récapitulatif final.
+  for (let i = 0; i < 2; i++) {
+    await tv.getByRole('button', { name: /Démarrer l’enchère/ }).click();
+    await attendre(tv, '.montant-geant');
+    await dors(300);
+    await tel2.dispatchEvent('.btn-encherir5', 'click');
+    await dors(500);
+    await tv.dispatchEvent('.carton.dore .btn.fantome.mini', 'click');
+    await attendre(tv, '.tampon');
+    await dors(400);
+    await tv.getByRole('button', { name: /Valider et inscrire/ }).click();
+    await dors(800);
+  }
+  await attendre(tv, '.recap', () => true, 10000);
+  await dors(600);
+  await tv.screenshot({ path: '/tmp/cap-12-recap.png' });
+  await tel.screenshot({ path: '/tmp/cap-13-releve-tel.png' });
 
   await nav.close();
   serveur.kill('SIGKILL');
