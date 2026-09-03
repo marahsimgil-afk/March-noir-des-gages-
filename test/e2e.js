@@ -170,6 +170,7 @@ async function principal() {
     await tv.page.getByRole('button', { name: /Écran central/ }).click();
 
     const champs = await tv.page.$$('input.champ');
+    verifier(champs.length >= 10, 'dix places de joueur sont proposées d’emblée', `${champs.length} champs`);
     for (let i = 0; i < JOUEURS.length; i++) await champs[i].fill(JOUEURS[i]);
     ok('3 prénoms saisis', JOUEURS.join(', '));
 
@@ -212,6 +213,9 @@ async function principal() {
     titre('3. Mise en vente — le lot vient du programme');
     const annonce = await attendre(tv.page, '.gage-titre', (t) => t.length > 0, 10000, '(lot suivant)');
     verifier(annonce.texte === PROGRAMME[0], 'le premier lot du programme est proposé sans rien retaper', annonce.texte);
+    const durees = await tv.page.$$eval('.segmente button', (l) => l.map((e) => e.textContent.trim()));
+    verifier(durees.join(' ') === '10 s 15 s 20 s 30 s', 'les durées proposées vont de 10 à 30 s', durees.join(' · '));
+
     await tv.page.getByRole('button', { name: /Démarrer l’enchère/ }).click();
     await attendre(tv.page, '.montant-geant', () => true, 10000, '(enchère ouverte)');
     ok('enchère démarrée en un bouton');
@@ -220,6 +224,8 @@ async function principal() {
       const v = await attendre(tel.page, '.btn-encherir .lib', (t) => /ENCHÉRIR/.test(t), 12000, `(bouton chez ${nom})`);
       ok(`${nom} voit le lot et le bouton d’enchère`, `en ${v.ms} ms`);
     }
+    const boutons5 = await tel1.page.$$eval('.btn-encherir5', (l) => l.length);
+    verifier(boutons5 === 0, 'le raccourci +5 a bien disparu', 'seul +1 reste');
 
     /* ---------- 4. Une mise doit remonter sur l'écran central ---------- */
     titre('4. Propagation d’une mise (téléphone → écran central)');
@@ -239,9 +245,9 @@ async function principal() {
     ok('Bruno voit qui mène');
 
     t0 = Date.now();
-    await tel2.page.click('.btn-encherir5');
-    await attendre(tv.page, '.montant-geant', (t) => t === '6', 12000, '(6 attendu sur la TV)');
-    ok('le +5 de Bruno remonte sur l’écran central', `${Date.now() - t0} ms → 6 gorgées`);
+    await tel2.page.click('.btn-encherir');
+    await attendre(tv.page, '.montant-geant', (t) => t === '2', 12000, '(2 attendu sur la TV)');
+    ok('la surenchère de Bruno remonte sur l’écran central', `${Date.now() - t0} ms → 2 gorgées`);
     await attendre(tel1.page, '.btn-encherir .lib', (t) => /ENCHÉRIR/.test(t), 8000);
     const libAlice = await tel1.page.$eval('.btn-encherir .lib', (e) => e.textContent.trim());
     verifier(libAlice === '+1 ENCHÉRIR', 'Alice n’est plus meneuse : son bouton se réactive', libAlice);
@@ -254,7 +260,7 @@ async function principal() {
       await tel1.page.dispatchEvent('.btn-encherir', 'click');
       await dors(35);
     }
-    const attendu = String(6 + RAFALE);
+    const attendu = String(2 + RAFALE);
     const rr = await attendre(tv.page, '.montant-geant', (t) => t === attendu, 15000, `(${attendu} attendu)`);
     verifier(true, `${RAFALE} taps rapides comptés exactement`, `${attendu} gorgées, stabilisé en ${rr.ms} ms`);
 
@@ -289,22 +295,42 @@ async function principal() {
     const ardoiseAlice = await attendre(tel1.page, '.ligne .val', (t) => t === attendu, 12000, '(ardoise chez Alice)');
     ok('Alice voit sa propre ardoise mise à jour', `${ardoiseAlice.texte} gorgées`);
 
-    /* ---------- 9. Prolongation anti-sniper ---------- */
-    titre('9. Prolongation si l’on mise dans les dernières secondes');
+    /* ---------- 9. Prolongation plafonnée ---------- */
+    titre('9. Prolongation — mais l’enchère doit finir');
     const lot2 = await attendre(tv.page, '.gage-titre', (t) => t.length > 0, 10000, '(lot 2)');
     verifier(lot2.texte === PROGRAMME[1], 'le lot suivant s’enchaîne tout seul', lot2.texte);
-    await tv.page.$$eval('.segmente button', (l) => l[0].click()); // 20 s
+    await tv.page.$$eval('.segmente button', (l) => l[0].click()); // 10 s
     await tv.page.getByRole('button', { name: /Démarrer l’enchère/ }).click();
     await attendre(tv.page, '.minuteur', (t) => Number(t) > 0, 10000);
     await attendre(tv.page, '.minuteur', (t) => Number(t) <= 3, 30000, '(3 dernières secondes)');
-    await tel2.page.click('.btn-encherir');
-    const prolong = await attendre(tv.page, '.etiquette', (t) => /Prolongation/.test(t), 8000);
-    verifier(true, 'l’enchère est prolongée par une mise de dernière seconde', prolong.texte);
-    const secondes = Number(await tv.page.$eval('.minuteur', (e) => e.textContent.trim()));
-    verifier(secondes >= 2, 'le minuteur est bien reparti', `${secondes} s`);
 
-    await tv.page.getByRole('button', { name: /Adjuger maintenant/ }).click();
-    await attendre(tv.page, '.tampon', () => true, 10000);
+    await tel2.page.dispatchEvent('.btn-encherir', 'click');
+    const prolong = await attendre(tv.page, '.etiquette', (t) => /Prolongation/.test(t), 8000);
+    ok('une mise de dernière seconde prolonge l’enchère', prolong.texte);
+
+    // Les deux téléphones misent en continu : sans plafond, le marteau ne
+    // tomberait jamais et l'enchère grimperait indéfiniment.
+    const tHarcele = Date.now();
+    const harcelement = setInterval(() => {
+      tel1.page.dispatchEvent('.btn-encherir', 'click').catch(() => {});
+      tel2.page.dispatchEvent('.btn-encherir', 'click').catch(() => {});
+    }, 400);
+
+    let plafond = null;
+    let adjuge = false;
+    try {
+      plafond = await attendre(tv.page, '.etiquette', (t) => /Dernière prolongation/.test(t), 15000, '(plafond)');
+      await attendre(tv.page, '.tampon', () => true, 15000, '(adjudication malgré le harcèlement)');
+      adjuge = true;
+    } catch (e) {
+      ko('l’enchère ne s’est pas terminée', e.message);
+    }
+    clearInterval(harcelement);
+
+    if (plafond) ok('le plafond de prolongations est atteint et annoncé', plafond.texte);
+    verifier(adjuge, 'l’enchère se termine malgré les mises continues de dernière seconde',
+      `marteau tombé après ${Math.round((Date.now() - tHarcele) / 1000)} s de harcèlement`);
+
     await tv.page.getByRole('button', { name: /Valider et inscrire/ }).click();
     ok('deuxième lot adjugé et validé');
 

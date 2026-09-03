@@ -32,7 +32,8 @@ var GAGES = [
   "Le droit d'échanger de tenue avec quelqu'un pendant 30 minutes",
   "Désigner qui doit répondre à toutes les questions en chantant pendant 10 minutes"
 ];
-var DUREES = [20, 30, 45, 60];
+var DUREES = [10, 15, 20, 30];
+var PROLONGATIONS_MAX = 2;
 
 function h(tag, attrs, enfants) {
   var e = document.createElement(tag);
@@ -163,7 +164,7 @@ function panneauChoix(racine) {
     lancer.disabled = !choix;
   };
   lancer.onclick = function () {
-    lot = { titre: choix, statut: 'ouvert', duree: duree * 1000, fin: Date.now() + duree * 1000, offres: {}, meneur: null, montant: 0 };
+    lot = { titre: choix, statut: 'ouvert', duree: duree * 1000, fin: Date.now() + duree * 1000, offres: {}, meneur: null, montant: 0, prolonge: 0 };
     dessiner(racine);
   };
 
@@ -200,8 +201,12 @@ function panneauEnchere(racine) {
     lot.montant = (lot.montant || 0) + n;
     lot.offres[pid] = lot.montant;
     lot.meneur = pid;
+    // Prolongations plafonnées : sinon l'enchère ne se termine jamais.
     var reste = lot.fin - Date.now();
-    if (reste > 0 && reste < 3000) lot.fin = Date.now() + 3000;
+    if (reste > 0 && reste < 3000 && lot.prolonge < PROLONGATIONS_MAX) {
+      lot.fin = Date.now() + 3000;
+      lot.prolonge++;
+    }
     maj();
     Array.prototype.forEach.call(lignes.children, function (el) {
       var id = el.getAttribute('data-pid');
@@ -215,8 +220,7 @@ function panneauEnchere(racine) {
     var l = h('div', { class: 'ligne', 'data-pid': j.id }, [
       h('span', { class: 'nom' }, j.nom),
       val,
-      h('button', { class: 'btn mini', style: 'margin-left:10px', onclick: function () { miser(j.id, 1); } }, '+1'),
-      h('button', { class: 'btn mini or', onclick: function () { miser(j.id, 5); } }, '+5')
+      h('button', { class: 'btn mini or', style: 'margin-left:10px', onclick: function () { miser(j.id, 1); } }, '+1')
     ]);
     return l;
   }));
@@ -234,7 +238,7 @@ function panneauEnchere(racine) {
 
   maj();
   return h('div', { class: 'carton dore', style: 'text-align:center' }, [
-    h('div', { class: 'etiquette' }, 'Enchère ouverte'),
+    h('div', { class: 'etiquette' }, lot.prolonge ? ('Prolongation ' + lot.prolonge + ' / ' + PROLONGATIONS_MAX) : 'Enchère ouverte'),
     h('div', { class: 'gage-titre', style: 'margin:12px 0 16px' }, lot.titre),
     min, h('div', { class: 'etiquette', style: 'margin:2px 0 12px' }, 'secondes'), jauge,
     h('hr', { class: 'filet-or' }),

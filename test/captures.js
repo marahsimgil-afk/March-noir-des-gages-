@@ -46,7 +46,7 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
   await tv.screenshot({ path: '/tmp/cap-1-accueil.png' });
 
   await tv.getByRole('button', { name: /Écran central/ }).click();
-  const noms = ['Marah', 'Léa', 'Tom', 'Inès', 'Hugo', 'Jade', 'Malo', 'Nina', 'Yanis'];
+  const noms = ['Marah', 'Léa', 'Tom', 'Inès', 'Hugo', 'Jade', 'Malo', 'Nina', 'Yanis', 'Sacha'];
   const champs = await tv.$$('input.champ');
   for (let i = 0; i < noms.length; i++) await champs[i].fill(noms[i]);
   await tv.fill('textarea.champ', [
@@ -81,8 +81,10 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
   // Playwright attendrait 30 s qu'il redevienne cliquable.
   const miser = async (p, sel) => { await p.dispatchEvent(sel, 'click'); await dors(450); };
   await miser(tel, '.btn-encherir');
-  await miser(tel2, '.btn-encherir5');
-  await miser(tel, '.btn-encherir5');
+  await miser(tel2, '.btn-encherir');
+  await miser(tel, '.btn-encherir');
+  await miser(tel2, '.btn-encherir');
+  await miser(tel, '.btn-encherir');
   await miser(tel2, '.btn-encherir');
   await miser(tel, '.btn-encherir');
   await dors(900);
@@ -106,7 +108,7 @@ async function attendre(page, sel, pred = () => true, max = 15000) {
     await tv.getByRole('button', { name: /Démarrer l’enchère/ }).click();
     await attendre(tv, '.montant-geant');
     await dors(300);
-    await tel2.dispatchEvent('.btn-encherir5', 'click');
+    await tel2.dispatchEvent('.btn-encherir', 'click');
     await dors(500);
     await tv.dispatchEvent('.carton.dore .btn.fantome.mini', 'click');
     await attendre(tv, '.tampon');
