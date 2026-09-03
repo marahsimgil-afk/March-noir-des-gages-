@@ -31,11 +31,9 @@ var BROKERS = [
 
 var ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I, O, 0, 1
 var DUREES = [10, 15, 20, 30];
-// Anti-snipe : une mise dans les 3 dernières secondes relance le marteau à 3 s.
-// Mais le nombre de prolongations est plafonné, sinon deux joueurs obstinés
-// font monter l'enchère indéfiniment, trois secondes à la fois.
-var PROLONGATION_MS = 3000;
-var PROLONGATIONS_MAX = 2;
+// Aucune prolongation : la durée annoncée est la durée réelle. Une mise dans la
+// dernière seconde ne rallonge rien — c'est ce qui rend la fin nerveuse, et ce
+// qui empêche deux joueurs obstinés de faire grimper l'ardoise sans fin.
 
 var GAGES = [
   "Désigner qui porte un chapeau ridicule toute la soirée",
@@ -312,14 +310,6 @@ function creerLien(opts) {
   };
 }
 
-/* Ce que le minuteur raconte : ouverture, prolongation en cours, ou dernière. */
-function libelleEnchere(lot, defaut) {
-  var n = lot.prolonge || 0;
-  if (!n) return defaut;
-  if (n >= PROLONGATIONS_MAX) return 'Dernière prolongation';
-  return 'Prolongation ' + n + ' / ' + PROLONGATIONS_MAX;
-}
-
 function topics(code) {
   return {
     etat: 'mng/' + code + '/etat',
@@ -467,11 +457,6 @@ function creerHote(code, broker, joueursInitiaux, programmeInitial, etatRepris) 
       etat.lot.meneur = m.pid;
       etat.lot.montant = nouveau;
 
-      var restant = etat.lot.fin - Date.now();
-      if (restant > 0 && restant < PROLONGATION_MS && etat.lot.prolonge < PROLONGATIONS_MAX) {
-        etat.lot.fin = Date.now() + PROLONGATION_MS;
-        etat.lot.prolonge++;
-      }
       publier();
       if (api.onMise) api.onMise(m.pid, nouveau);
     }
@@ -538,8 +523,7 @@ function creerHote(code, broker, joueursInitiaux, programmeInitial, etatRepris) 
         fin: Date.now() + dureeSec * 1000,
         offres: {},
         meneur: null,
-        montant: 0,
-        prolonge: 0
+        montant: 0
       };
       publier(true);
     },
@@ -1174,7 +1158,7 @@ function ecranHote(hote) {
     var meneur = lot.meneur ? nomDe(etat, lot.meneur) : null;
 
     return h('div', { class: 'carton dore', style: 'text-align:center' }, [
-      h('div', { class: 'etiquette' }, libelleEnchere(lot, 'Enchère ouverte')),
+      h('div', { class: 'etiquette' }, 'Enchère ouverte'),
       h('div', { class: 'gage-titre', style: 'margin:14px 0 18px' }, lot.titre),
       refMinuteur,
       h('div', { class: 'etiquette', style: 'margin:6px 0 14px' }, 'secondes'),
@@ -1444,7 +1428,7 @@ function ecranHote(hote) {
   function signature(etat) {
     var l = etat.lot;
     return [
-      l ? l.id + ':' + l.statut + ':' + l.montant + ':' + (l.meneur || '') + ':' + (l.prolonge ? 1 : 0) + ':' + l.fin : 'vide',
+      l ? l.id + ':' + l.statut + ':' + l.montant + ':' + (l.meneur || '') + ':' + l.fin : 'vide',
       etat.joueurs.map(function (j) { return j.id + '=' + (etat.ardoise[j.id] || 0); }).join(','),
       (etat.enLigne || []).join(','),
       etat.programme.map(function (x) { return x.statut + (x.pid || '') + x.montant; }).join('~'),
@@ -1488,7 +1472,7 @@ function ecranHote(hote) {
       if (mg && mn) {
         mg.textContent = lot.meneur ? String(lot.montant) : '—';
         mn.textContent = lot.meneur ? nomDe(etat, lot.meneur) : ' ';
-        if (et[0]) et[0].textContent = libelleEnchere(lot, 'Enchère ouverte');
+        if (et[0]) et[0].textContent = 'Enchère ouverte';
         if (et[2]) et[2].textContent = lot.meneur ? 'Meilleure offre' : 'Aucune offre pour l’instant';
         if (et[3]) et[3].textContent = lot.meneur ? 'gorgées' : '';
         doitRedessinerLot = false;
@@ -1685,7 +1669,7 @@ function ecranJoueur(joueur, code, monNom) {
 
       haut.appendChild(h('div', { class: 'bande pile g16' }, [
         h('div', { class: 'carton dore centrer' }, [
-          h('div', { class: 'etiquette' }, libelleEnchere(lot, 'Lot en vente')),
+          h('div', { class: 'etiquette' }, 'Lot en vente'),
           h('div', { class: 'gage-titre', style: 'margin:12px 0 16px;font-size:clamp(18px,5vw,26px)' }, lot.titre),
           refMin,
           h('div', { class: 'etiquette', style: 'margin:2px 0 12px' }, 'secondes'),

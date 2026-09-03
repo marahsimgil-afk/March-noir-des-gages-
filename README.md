@@ -77,12 +77,9 @@ arrive en retard reçoit donc l'état courant à la seconde où il s'abonne.
 personnes qui tapent exactement en même temps ne peuvent donc pas se marcher
 dessus : les deux mises comptent, dans l'ordre où elles arrivent.
 
-**Les prolongations sont plafonnées.** Une mise dans les 3 dernières secondes
-relance le marteau à 3 s — sinon un joueur peut emporter le lot en misant à la
-toute dernière fraction de seconde. Mais au-delà de deux prolongations, plus
-rien ne rallonge l'enchère : sans ce plafond, deux joueurs obstinés font monter
-le montant indéfiniment, trois secondes à la fois. L'écran annonce
-« Prolongation 1 / 2 », puis « Dernière prolongation ».
+**Aucune prolongation.** La durée annoncée est la durée réelle : miser dans la
+dernière seconde ne rallonge rien. C'est ce qui rend la fin nerveuse — et ce qui
+empêche deux joueurs obstinés de faire grimper l'ardoise sans fin.
 
 **Les taps rapprochés sont regroupés** (fenêtre de 90 ms) en un seul message,
 pour que dix taps d'affilée fassent bien +10 sans inonder le réseau.
@@ -127,8 +124,8 @@ deux téléphones, plus un retardataire) et vérifie notamment :
 - dix taps rapides sont comptés exactement, sans perte ni doublon ;
 - un retardataire qui arrive en cours d'enchère récupère l'état courant ;
 - l'adjudication met bien à jour l'ardoise partout ;
-- une mise dans les 3 dernières secondes prolonge l'enchère, mais deux fois au
-  maximum : même en misant sans arrêt, le marteau finit par tomber ;
+- miser sans interruption dans les dernières secondes ne rallonge pas l'enchère :
+  le minuteur ne repart jamais en arrière et le marteau tombe à l'heure ;
 - les lots s'enchaînent tout seuls dans l'ordre du programme ;
 - le récapitulatif s'ouvre de lui-même au dernier lot, avec l'ardoise de chacun
   et la liste de qui a acheté quoi ;

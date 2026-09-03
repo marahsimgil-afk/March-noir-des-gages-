@@ -295,8 +295,8 @@ async function principal() {
     const ardoiseAlice = await attendre(tel1.page, '.ligne .val', (t) => t === attendu, 12000, '(ardoise chez Alice)');
     ok('Alice voit sa propre ardoise mise à jour', `${ardoiseAlice.texte} gorgées`);
 
-    /* ---------- 9. Prolongation plafonnée ---------- */
-    titre('9. Prolongation — mais l’enchère doit finir');
+    /* ---------- 9. Aucune prolongation ---------- */
+    titre('9. Dix secondes, c’est dix secondes');
     const lot2 = await attendre(tv.page, '.gage-titre', (t) => t.length > 0, 10000, '(lot 2)');
     verifier(lot2.texte === PROGRAMME[1], 'le lot suivant s’enchaîne tout seul', lot2.texte);
     await tv.page.$$eval('.segmente button', (l) => l[0].click()); // 10 s
@@ -304,32 +304,40 @@ async function principal() {
     await attendre(tv.page, '.minuteur', (t) => Number(t) > 0, 10000);
     await attendre(tv.page, '.minuteur', (t) => Number(t) <= 3, 30000, '(3 dernières secondes)');
 
-    await tel2.page.dispatchEvent('.btn-encherir', 'click');
-    const prolong = await attendre(tv.page, '.etiquette', (t) => /Prolongation/.test(t), 8000);
-    ok('une mise de dernière seconde prolonge l’enchère', prolong.texte);
+    const restantAvant = Number(await tv.page.$eval('.minuteur', (e) => e.textContent.trim()));
 
-    // Les deux téléphones misent en continu : sans plafond, le marteau ne
-    // tomberait jamais et l'enchère grimperait indéfiniment.
-    const tHarcele = Date.now();
+    // Les deux téléphones misent sans interruption dans les dernières secondes.
+    // Le minuteur ne doit jamais repartir en arrière.
+    let maxRevu = 0;
+    let prolongationVue = false;
     const harcelement = setInterval(() => {
       tel1.page.dispatchEvent('.btn-encherir', 'click').catch(() => {});
       tel2.page.dispatchEvent('.btn-encherir', 'click').catch(() => {});
-    }, 400);
+    }, 250);
+    const surveillance = setInterval(() => {
+      tv.page.$eval('.minuteur', (e) => e.textContent.trim())
+        .then((v) => { const n = Number(v); if (n > maxRevu) maxRevu = n; })
+        .catch(() => {});
+      tv.page.$eval('.etiquette', (e) => e.textContent.trim())
+        .then((t) => { if (/prolongation/i.test(t)) prolongationVue = true; })
+        .catch(() => {});
+    }, 120);
 
-    let plafond = null;
     let adjuge = false;
     try {
-      plafond = await attendre(tv.page, '.etiquette', (t) => /Dernière prolongation/.test(t), 15000, '(plafond)');
-      await attendre(tv.page, '.tampon', () => true, 15000, '(adjudication malgré le harcèlement)');
+      await attendre(tv.page, '.tampon', () => true, 9000, '(adjudication à l’heure)');
       adjuge = true;
     } catch (e) {
-      ko('l’enchère ne s’est pas terminée', e.message);
+      ko('le lot ne s’est pas clôturé', e.message);
     }
     clearInterval(harcelement);
+    clearInterval(surveillance);
 
-    if (plafond) ok('le plafond de prolongations est atteint et annoncé', plafond.texte);
-    verifier(adjuge, 'l’enchère se termine malgré les mises continues de dernière seconde',
-      `marteau tombé après ${Math.round((Date.now() - tHarcele) / 1000)} s de harcèlement`);
+    verifier(adjuge, 'le marteau tombe à l’heure malgré les mises de dernière seconde',
+      `il restait ${restantAvant} s quand le harcèlement a commencé`);
+    verifier(maxRevu <= restantAvant, 'le minuteur ne repart jamais en arrière',
+      `maximum revu ensuite : ${maxRevu} s`);
+    verifier(!prolongationVue, 'aucune prolongation n’est annoncée nulle part');
 
     await tv.page.getByRole('button', { name: /Valider et inscrire/ }).click();
     ok('deuxième lot adjugé et validé');
