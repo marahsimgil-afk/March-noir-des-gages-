@@ -10,19 +10,13 @@ Aucun compte, aucune application à installer.
 
 ---
 
-## Mettre l'application en ligne (une seule fois, ~30 secondes)
+## L'adresse
 
-L'hébergement est gratuit et permanent, mais GitHub demande une autorisation
-qu'un robot n'a pas le droit de donner à ma place. À faire une fois :
+**https://marahsimgil-afk.github.io/March-noir-des-gages-/**
 
-1. Ouvrir **https://github.com/marahsimgil-afk/March-noir-des-gages-/settings/pages**
-2. Sous **Source**, choisir **Deploy from a branch**
-3. **Branch** : `claude/marche-noir-gages-app-dolp68` — dossier `/ (root)` — **Save**
-4. Attendre une minute, puis ouvrir :
-
-   **https://marahsimgil-afk.github.io/March-noir-des-gages-/**
-
-C'est cette adresse qui devient le lien de la soirée. Elle ne change plus.
+GitHub Pages publie cette branche : chaque push est en ligne une minute plus
+tard, et le scénario complet est rejoué automatiquement contre cette adresse,
+sur les vrais brokers publics.
 
 ---
 
